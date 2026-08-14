@@ -32,10 +32,21 @@
               <option value="prototype">Prototipo 3 varillas</option>
               <option value="lattice">Celosía triangular</option>
               <option value="mast">Mástil reforzado</option>
+              <option value="rectangular">Prisma reticulado</option>
+              <option value="tapered">Celosía troncopiramidal</option>
+              <option value="slatted">Torre de listones</option>
+              <option value="platform">Torre con plataforma</option>
+              <option value="eiffel">Torre tipo Eiffel</option>
+              <option value="transmission">Torre de transmisión</option>
             </select>
           </label>
           <label>Altura <output id="heightOut">34 cm</output></label>
           <input id="height" type="range" min="10" max="100" value="34" step="1" />
+          <div class="tower-metrics">
+            <span>Palitos <b id="stickCountOut">—</b></span>
+            <span>Masa torre <b id="towerMassOut">—</b></span>
+          </div>
+          <p class="hint">Cada palito aporta 1.0 g. La masa y el centro de masa se recalculan según el modelo.</p>
         </section>
 
         <section class="control-section">
@@ -72,12 +83,15 @@
             <h2>Poleas · vectores rᵢ</h2>
             <button class="mini-reset" id="resetPulleys">Reiniciar poleas</button>
           </div>
-          <p class="hint">Origen en la rótula. 0° = +x y 90° = +z. Radio máximo: 20 cm. Los ángulos aceptan una cifra decimal.</p>
+          <p class="hint">Origen en la rótula. 0° = +x y 90° = +z. Radio máximo: 100 cm. Radio y ángulo aceptan una cifra decimal.</p>
 
           <article class="vector-card v1">
             <div class="vector-title"><span>P1</span><b>r₁</b><output id="r1VecOut">(−14.7, 8.5) cm</output></div>
             <label>Radio <output id="r1Out">17.0 cm</output></label>
-            <input id="r1" type="range" min="2" max="20" value="17" step="0.1" />
+            <div class="range-with-number">
+              <input id="r1" type="range" min="2" max="100" value="17.0" step="0.1" />
+              <div class="number-box radius-box"><input id="r1Num" type="number" inputmode="decimal" min="2" max="100" value="17.0" step="0.1" aria-label="Radio de P1 en centímetros" /><span>cm</span></div>
+            </div>
             <label>Ángulo <output id="a1Out">150.0°</output></label>
             <div class="range-with-number">
               <input id="a1" type="range" min="0" max="360" value="150.0" step="0.1" />
@@ -88,7 +102,10 @@
           <article class="vector-card v2">
             <div class="vector-title"><span>P2</span><b>r₂</b><output id="r2VecOut">(14.7, 8.5) cm</output></div>
             <label>Radio <output id="r2Out">17.0 cm</output></label>
-            <input id="r2" type="range" min="2" max="20" value="17" step="0.1" />
+            <div class="range-with-number">
+              <input id="r2" type="range" min="2" max="100" value="17.0" step="0.1" />
+              <div class="number-box radius-box"><input id="r2Num" type="number" inputmode="decimal" min="2" max="100" value="17.0" step="0.1" aria-label="Radio de P2 en centímetros" /><span>cm</span></div>
+            </div>
             <label>Ángulo <output id="a2Out">30.0°</output></label>
             <div class="range-with-number">
               <input id="a2" type="range" min="0" max="360" value="30.0" step="0.1" />
@@ -99,7 +116,10 @@
           <article class="vector-card v3">
             <div class="vector-title"><span>P3</span><b>r₃</b><output id="r3VecOut">(0.0, −17.0) cm</output></div>
             <label>Radio <output id="r3Out">17.0 cm</output></label>
-            <input id="r3" type="range" min="2" max="20" value="17" step="0.1" />
+            <div class="range-with-number">
+              <input id="r3" type="range" min="2" max="100" value="17.0" step="0.1" />
+              <div class="number-box radius-box"><input id="r3Num" type="number" inputmode="decimal" min="2" max="100" value="17.0" step="0.1" aria-label="Radio de P3 en centímetros" /><span>cm</span></div>
+            </div>
             <label>Ángulo <output id="a3Out">270.0°</output></label>
             <div class="range-with-number">
               <input id="a3" type="range" min="0" max="360" value="270.0" step="0.1" />
@@ -115,6 +135,7 @@
           <h2>Lectura instantánea</h2>
           <div><span>Momento residual</span><b id="momentOut">0 N·m</b></div>
           <div><span>Inclinación</span><b id="tiltOut">0.0°</b></div>
+          <div><span>Tope por contacto</span><b id="contactTiltOut">—</b></div>
           <div><span>m₃ de equilibrio</span><b id="idealM3Out">5.00 g</b></div>
           <div><span>r₃ de equilibrio</span><b id="idealR3Out">—</b></div>
         </section>

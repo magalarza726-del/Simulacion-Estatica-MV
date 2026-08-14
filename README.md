@@ -31,3 +31,13 @@ Para que el botón pueda determinar una solución única cuando m3 y r3 son edit
 - Cada masa puede ajustarse con slider o escribirse directamente.
 - Los ángulos de P1, P2 y P3 pueden ajustarse con slider o escribirse con paso de 0.1°.
 - Todos los cambios siguen siendo en tiempo real; no hay botón de actualización.
+
+
+## V5 — radios, modelos y masa estructural
+- r1, r2 y r3: slider + entrada numérica, 2.0 cm a 100.0 cm, paso 0.1 cm.
+- 9 modelos de torre, todos convergen en un único nudo superior para los tres cables.
+- Cada segmento/palito estructural pesa 1.0 g; la masa de la torre y su centro de masa se recalculan automáticamente.
+- La solución analítica de m3/r3 no cambia: el peso de la torre no produce momento en la postura vertical.
+- La dinámica de inclinación sí usa el peso estructural calculado y g=9.81 m/s².
+- El límite de caída es el contacto geométrico con el disco de madera, no un ángulo fijo arbitrario.
+- Las poleas están giradas 90° respecto a la versión anterior.
