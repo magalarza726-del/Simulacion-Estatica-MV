@@ -128,7 +128,21 @@ function idealSolution(){const s=readState(),H=s.h;const R1=polar(s.r[0],s.a[0])
 function calcEquilibrium(){const sol=idealSolution();$('m3').value=Math.min(30,Math.max(.5,sol.m3*1000));$('a3').value=Math.round(sol.a3);resetTowerPose();updateGeometry()}
 
 function cableForce(i){const s=readState(),top=topWorldThree(),anchor=anchors[i].clone().setY(BASE_THICK/2+.03),dir=anchor.sub(top).normalize();return dir.multiplyScalar(s.m[i]*G)}
-function staticMomentMagnitude(){const s=readState();const top=new THREE.Vector3(0,s.h,0);let tau=new THREE.Vector3();for(let i=0;i<3;i++){const R=polar(s.r[i],s.a[i]);R.y=0;const anchor=R.clone().setY(BASE_THICK/2+.03);const F=anchor.sub(top).normalize().multiplyScalar(s.m[i]*G);tau.add(top.clone().cross(F))}return tau.length()}
+function staticMomentVector(){
+  const s=readState();
+  const rTop=new THREE.Vector3(0,s.h,0); // vector desde la rótula hasta la punta, en posición vertical
+  const topWorld=new THREE.Vector3(0,PIVOT_Y+s.h,0);
+  let tau=new THREE.Vector3();
+  for(let i=0;i<3;i++){
+    const R=polar(s.r[i],s.a[i]); R.y=0;
+    const anchorWorld=R.clone().setY(BASE_THICK/2+.03);
+    const F=anchorWorld.sub(topWorld).normalize().multiplyScalar(s.m[i]*G);
+    tau.add(rTop.clone().cross(F));
+  }
+  // En la posición vertical el peso pasa por O y no produce momento.
+  return tau;
+}
+function staticMomentMagnitude(){return staticMomentVector().length()}
 function applyCableForces(){const topLocal=new CANNON.Vec3(0,towerH-towerCom,0),topW=new CANNON.Vec3();towerBody.pointToWorldFrame(topLocal,topW);const s=readState();for(let i=0;i<3;i++){const a=anchors[i];const dir=new CANNON.Vec3(a.x-topW.x,(BASE_THICK/2+.03)-topW.y,a.z-topW.z);dir.normalize();dir.scale(s.m[i]*G,dir);towerBody.applyForce(dir,topW)}
   // Tope mecánico suave: representa contacto/limitación física de la rótula y el tablero, no una gravedad artificial.
   const up=new CANNON.Vec3(0,1,0);towerBody.quaternion.vmult(up,up);const tilt=Math.acos(Math.max(-1,Math.min(1,up.y)));const soft=THREE.MathUtils.degToRad(42);if(tilt>soft){const axis=new CANNON.Vec3(up.z,0,-up.x);if(axis.lengthSquared()>1e-10){axis.normalize();const k=0.045*(tilt-soft);axis.scale(-k,axis);towerBody.torque.vadd(axis,towerBody.torque)}}}
@@ -137,8 +151,46 @@ function resetTowerPose(){if(!towerBody)return;towerBody.position.set(0,PIVOT_Y+
 const dclGroup=new THREE.Group();scene.add(dclGroup);dclGroup.visible=false;let dclOn=false;
 function clearGroup(g){while(g.children.length)g.remove(g.children[0])}
 function addComponentArrow(origin,axisValue,axis,color,label){if(Math.abs(axisValue)<1e-5)return;const scale=.18,vec=new THREE.Vector3();vec[axis]=axisValue*scale;const ar=new THREE.ArrowHelper(vec.clone().normalize(),origin,Math.max(.025,vec.length()),color,.012,.006);dclGroup.add(ar);const s=textSprite(label,{color:'#17212b',font:38,scale:.017,bg:'rgba(255,255,255,.82)'});s.position.copy(origin).add(vec).add(new THREE.Vector3(0,.012,0));dclGroup.add(s)}
-function updateDCLVisual(){if(!towerBody)return;clearGroup(dclGroup);const top=topWorldThree(),cm=cmWorldThree();const Fs=[cableForce(0),cableForce(1),cableForce(2)];const weight=new THREE.Vector3(0,-towerMass*G,0);const a=smoothAccel.clone();const sumExt=Fs[0].clone().add(Fs[1]).add(Fs[2]).add(weight);const reaction=a.multiplyScalar(towerMass).sub(sumExt);const offsets=[-.018,0,.018];for(let i=0;i<3;i++){const o=top.clone().add(new THREE.Vector3(0,offsets[i],0));addComponentArrow(o,Fs[i].x,'x',vecColors[i],`T${i+1}x`);addComponentArrow(o,Fs[i].z,'z',vecColors[i],`T${i+1}z`)}addComponentArrow(new THREE.Vector3(0,PIVOT_Y,0),reaction.x,'x',0xf59e0b,'Rx');addComponentArrow(new THREE.Vector3(0,PIVOT_Y+.01,0),reaction.z,'z',0xf59e0b,'Rz');const wv=new THREE.Vector3(0,-Math.max(.035,towerMass*G*.18),0);dclGroup.add(new THREE.ArrowHelper(wv.clone().normalize(),cm,wv.length(),0x111827,.012,.006));const ws=textSprite('Wj',{font:38,scale:.017});ws.position.copy(cm).add(wv).add(new THREE.Vector3(0,.012,0));dclGroup.add(ws);
-  const f=n=>n.toFixed(3);$('t1x').textContent=f(Fs[0].x);$('t1z').textContent=f(Fs[0].z);$('t2x').textContent=f(Fs[1].x);$('t2z').textContent=f(Fs[1].z);$('t3x').textContent=f(Fs[2].x);$('t3z').textContent=f(Fs[2].z);$('rx').textContent=f(reaction.x);$('rz').textContent=f(reaction.z);$('wj').textContent=`${f(-towerMass*G)} j N`;}
+function updateDCLVisual(){
+  if(!towerBody)return;
+  clearGroup(dclGroup);
+  const top=topWorldThree(), cm=cmWorldThree();
+  const Fs=[cableForce(0),cableForce(1),cableForce(2)];
+  const weight=new THREE.Vector3(0,-towerMass*G,0);
+  const sumExt=Fs[0].clone().add(Fs[1]).add(Fs[2]).add(weight);
+  // Como la rótula fija el punto O, la reacción traslacional es la opuesta
+  // a la suma de las fuerzas aplicadas. La rótula no aporta momento.
+  const reaction=sumExt.clone().multiplyScalar(-1);
+
+  const offsets=[-.028,0,.028];
+  for(let i=0;i<3;i++){
+    const o=top.clone().add(new THREE.Vector3(offsets[i],offsets[i]*.35,-offsets[i]*.25));
+    addComponentArrow(o,Fs[i].x,'x',vecColors[i],`T${i+1}x`);
+    addComponentArrow(o,Fs[i].y,'y',vecColors[i],`T${i+1}y`);
+    addComponentArrow(o,Fs[i].z,'z',vecColors[i],`T${i+1}z`);
+  }
+  const ro=new THREE.Vector3(0,PIVOT_Y+.012,0);
+  addComponentArrow(ro,reaction.x,'x',0xf59e0b,'Rx');
+  addComponentArrow(ro,reaction.y,'y',0xf59e0b,'Ry');
+  addComponentArrow(ro,reaction.z,'z',0xf59e0b,'Rz');
+
+  // El peso solo tiene componente y: W=(0,-mg,0).
+  const visualScale=.18;
+  const wv=weight.clone().multiplyScalar(visualScale);
+  if(wv.length()>1e-7){
+    dclGroup.add(new THREE.ArrowHelper(wv.clone().normalize(),cm,Math.max(.035,wv.length()),0x111827,.012,.006));
+    const ws=textSprite('Wy',{font:38,scale:.017});
+    ws.position.copy(cm).add(wv).add(new THREE.Vector3(0,.012,0));
+    dclGroup.add(ws);
+  }
+
+  const f=n=>Math.abs(n)<5e-7?'0.000':n.toFixed(3);
+  $('t1x').textContent=f(Fs[0].x);$('t1y').textContent=f(Fs[0].y);$('t1z').textContent=f(Fs[0].z);
+  $('t2x').textContent=f(Fs[1].x);$('t2y').textContent=f(Fs[1].y);$('t2z').textContent=f(Fs[1].z);
+  $('t3x').textContent=f(Fs[2].x);$('t3y').textContent=f(Fs[2].y);$('t3z').textContent=f(Fs[2].z);
+  $('rx').textContent=f(reaction.x);$('ry').textContent=f(reaction.y);$('rz').textContent=f(reaction.z);
+  $('wx').textContent='0.000';$('wy').textContent=f(weight.y);$('wz').textContent='0.000';
+}
 
 function updateOutputs(){const s=readState(),sol=idealSolution();const f=(v,n=1)=>Number(v).toFixed(n);$('heightOut').textContent=f(s.h*100,0)+' cm';for(let i=0;i<3;i++)$(`m${i+1}Out`).textContent=f(s.m[i]*1000,2)+' g';for(let i=0;i<3;i++){$(`r${i+1}Out`).textContent=f(s.r[i],1)+' cm';$(`a${i+1}Out`).textContent=f(s.a[i],0)+'°';const R=polar(s.r[i],s.a[i]);$(`r${i+1}VecOut`).textContent=`(${f(R.x*100,1)}, ${f(R.z*100,1)}) cm`}$('idealM3Out').textContent=f(sol.m3*1000,3)+' g';$('idealR3Out').textContent=`(${f(sol.r3.x*100,2)}, ${f(sol.r3.z*100,2)}) cm`;const M=staticMomentMagnitude();$('momentOut').textContent=M.toExponential(2)+' N·m';const up=new THREE.Vector3(0,1,0).applyQuaternion(towerVisual?.quaternion||new THREE.Quaternion());const tilt=THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(up.y,-1,1)));$('tiltOut').textContent=f(tilt,1)+'°';const scale=Math.max(1e-7,(s.m[0]+s.m[1]+s.m[2])*G*s.h),err=M/scale;const st=$('status');st.className='status '+(err<.003?'ok':err<.035?'warn':'bad');st.innerHTML=`<span></span>${err<.003?'Equilibrada':err<.035?'Ligera inclinación':'Desequilibrada'}`}
 
@@ -155,7 +207,46 @@ let drag=false,lastX=0,lastY=0,pinchDist=null;canvas.addEventListener('pointerdo
 function updateCamera(){camera.position.set(cam.radius*Math.sin(cam.yaw)*Math.cos(cam.pitch),.12+cam.radius*Math.sin(cam.pitch),cam.radius*Math.cos(cam.yaw)*Math.cos(cam.pitch));camera.lookAt(0,Math.min(.30,towerH*.42),0)}
 function resize(){const rect=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(rect.width)),h=Math.max(1,Math.round(rect.height));if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}}
 
-function physicsStep(dt){if(!towerBody)return;applyCableForces();world.step(1/120,dt,4);const acc=new THREE.Vector3((towerBody.velocity.x-previousVel.x)/Math.max(dt,1e-4),(towerBody.velocity.y-previousVel.y)/Math.max(dt,1e-4),(towerBody.velocity.z-previousVel.z)/Math.max(dt,1e-4));smoothAccel.lerp(acc,.08);previousVel.copy(towerBody.velocity);syncTowerVisual();}
+function physicsStep(dt){
+  if(!towerBody)return;
+  // Visualización cuasiestática sobreamortiguada: se usa el momento real obtenido
+  // con T_i=m_i g y g=9.81 m/s², pero se evita deliberadamente cualquier rebote.
+  // Si ΣM_O≈0, la solución objetivo es exactamente vertical y no deriva por errores numéricos.
+  const s=readState();
+  const tau=staticMomentVector();
+  const M=tau.length();
+  const scale=Math.max(1e-9,(s.m[0]+s.m[1]+s.m[2])*G*s.h);
+  const err=M/scale;
+
+  let targetQ=new THREE.Quaternion();
+  if(err>5e-5 && M>1e-10){
+    const axis=new THREE.Vector3(tau.x,0,tau.z);
+    if(axis.lengthSq()>1e-14){
+      axis.normalize();
+      // Un desequilibrio pequeño produce una inclinación pequeña. Se limita la
+      // representación a 28° para mantener visible el montaje, sin "caída y rebote".
+      const targetTilt=Math.min(THREE.MathUtils.degToRad(28),err*THREE.MathUtils.degToRad(170));
+      targetQ.setFromAxisAngle(axis,targetTilt);
+    }
+  }
+
+  const currentQ=new THREE.Quaternion(towerBody.quaternion.x,towerBody.quaternion.y,towerBody.quaternion.z,towerBody.quaternion.w);
+  const alpha=1-Math.exp(-6.5*Math.max(dt,0)); // respuesta monótona, sin sobrepaso
+  currentQ.slerp(targetQ,alpha).normalize();
+
+  towerBody.quaternion.set(currentQ.x,currentQ.y,currentQ.z,currentQ.w);
+  towerBody.velocity.set(0,0,0);
+  towerBody.angularVelocity.set(0,0,0);
+  towerBody.force.set(0,0,0);
+  towerBody.torque.set(0,0,0);
+
+  // Mantener exactamente el punto de la rótula O unido a la torre.
+  const localPivot=new THREE.Vector3(0,-towerCom,0).applyQuaternion(currentQ);
+  towerBody.position.set(-localPivot.x,PIVOT_Y-localPivot.y,-localPivot.z);
+  smoothAccel.set(0,0,0);
+  previousVel.set(0,0,0);
+  syncTowerVisual();
+}
 let last=performance.now();function animate(now){requestAnimationFrame(animate);resize();updateCamera();const dt=Math.min(.025,Math.max(.001,(now-last)/1000));last=now;physicsStep(dt);updateGeometry();renderer.render(scene,camera)}
 
 bindRealtime();rebuildTower();calcEquilibrium();requestAnimationFrame(animate);

@@ -125,16 +125,16 @@
         <div class="scene-note">Arrastra la escena según el modo de rotación seleccionado.</div>
 
         <aside id="dclPanel" class="dcl-panel" hidden>
-          <div class="dcl-title"><b>DCL · componentes</b><span>x, z y peso j</span></div>
+          <div class="dcl-title"><b>DCL · componentes cartesianas</b><span>x, y, z</span></div>
           <div class="dcl-grid">
-            <div class="dcl-row h"><span>Fuerza</span><span>x [N]</span><span>z [N]</span></div>
-            <div class="dcl-row t1"><span>T₁</span><b id="t1x">0</b><b id="t1z">0</b></div>
-            <div class="dcl-row t2"><span>T₂</span><b id="t2x">0</b><b id="t2z">0</b></div>
-            <div class="dcl-row t3"><span>T₃</span><b id="t3x">0</b><b id="t3z">0</b></div>
-            <div class="dcl-row reaction"><span>Rótula R</span><b id="rx">0</b><b id="rz">0</b></div>
+            <div class="dcl-row h"><span>Fuerza</span><span>x [N]</span><span>y [N]</span><span>z [N]</span></div>
+            <div class="dcl-row t1"><span>T₁</span><b id="t1x">0</b><b id="t1y">0</b><b id="t1z">0</b></div>
+            <div class="dcl-row t2"><span>T₂</span><b id="t2x">0</b><b id="t2y">0</b><b id="t2z">0</b></div>
+            <div class="dcl-row t3"><span>T₃</span><b id="t3x">0</b><b id="t3y">0</b><b id="t3z">0</b></div>
+            <div class="dcl-row reaction"><span>Rótula R</span><b id="rx">0</b><b id="ry">0</b><b id="rz">0</b></div>
+            <div class="dcl-row weight"><span>Peso W</span><b id="wx">0</b><b id="wy">0</b><b id="wz">0</b></div>
           </div>
-          <div class="weight-row"><span>Peso</span><b id="wj">−0.000 j N</b></div>
-          <p>Las flechas del DCL muestran Tᵢx, Tᵢz, Rₓ, R_z y Wj. No se dibujan las componentes verticales de las tensiones, tal como se pidió.</p>
+          <p>Las tensiones T₁, T₂ y T₃ y la reacción de la rótula R se descomponen en x, y, z. El peso actúa únicamente en −y, por lo que Wₓ = 0 y W_z = 0.</p>
         </aside>
 
         <div class="legend">
