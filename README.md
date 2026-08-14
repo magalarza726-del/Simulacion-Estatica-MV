@@ -41,3 +41,12 @@ Para que el botón pueda determinar una solución única cuando m3 y r3 son edit
 - La dinámica de inclinación sí usa el peso estructural calculado y g=9.81 m/s².
 - El límite de caída es el contacto geométrico con el disco de madera, no un ángulo fijo arbitrario.
 - Las poleas están giradas 90° respecto a la versión anterior.
+
+
+## V6 — masa independiente y límite de 85°
+- Se eliminó por completo la relación `1 palito = 1 g`.
+- La masa de la torre se selecciona manualmente entre 1.0 g y 1000.0 g mediante slider + celda numérica.
+- Cambiar el modelo de torre no cambia su masa seleccionada.
+- El indicador `Equilibrada` y la dinámica usan exactamente la misma tolerancia de equilibrio; una torre marcada como equilibrada vuelve y permanece vertical.
+- La inclinación máxima está limitada a 85.0°.
+- La respuesta continúa siendo sobreamortiguada, sin rebote.

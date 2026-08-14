@@ -42,11 +42,12 @@
           </label>
           <label>Altura <output id="heightOut">34 cm</output></label>
           <input id="height" type="range" min="10" max="100" value="34" step="1" />
-          <div class="tower-metrics">
-            <span>Palitos <b id="stickCountOut">—</b></span>
-            <span>Masa torre <b id="towerMassOut">—</b></span>
+          <label>Masa de la torre <output id="towerMassOut">50.0 g</output></label>
+          <div class="range-with-number">
+            <input id="towerMass" type="range" min="1" max="1000" value="50.0" step="0.1" />
+            <div class="number-box"><input id="towerMassNum" type="number" inputmode="decimal" min="1" max="1000" value="50.0" step="0.1" aria-label="Masa de la torre en gramos" /><span>g</span></div>
           </div>
-          <p class="hint">Cada palito aporta 1.0 g. La masa y el centro de masa se recalculan según el modelo.</p>
+          <p class="hint">La masa de la torre es independiente del modelo geométrico. Rango: 1.0 g a 1000.0 g.</p>
         </section>
 
         <section class="control-section">
@@ -135,7 +136,7 @@
           <h2>Lectura instantánea</h2>
           <div><span>Momento residual</span><b id="momentOut">0 N·m</b></div>
           <div><span>Inclinación</span><b id="tiltOut">0.0°</b></div>
-          <div><span>Tope por contacto</span><b id="contactTiltOut">—</b></div>
+          <div><span>Inclinación máxima</span><b id="contactTiltOut">85.0°</b></div>
           <div><span>m₃ de equilibrio</span><b id="idealM3Out">5.00 g</b></div>
           <div><span>r₃ de equilibrio</span><b id="idealR3Out">—</b></div>
         </section>
