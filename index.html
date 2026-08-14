@@ -1,115 +1,150 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-  <title>Laboratorio 3D · Torre en Equilibrio</title>
-  <link rel="stylesheet" href="./styles.css"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#eef4f8" />
+  <title>Laboratorio 3D · Torre con rótula</title>
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <main id="app">
     <header class="topbar">
-      <div>
-        <h1>Laboratorio 3D · Equilibrio de la torre</h1>
-        <p>Mecánica Vectorial P4 · g = 9.81 m/s²</p>
+      <div class="brand">
+        <div class="brand-mark">MV</div>
+        <div>
+          <h1>Laboratorio 3D · Equilibrio de torre</h1>
+          <p>Rótula + 3 cables · g = 9.81 m/s²</p>
+        </div>
       </div>
-      <div id="statusPill" class="status ok">Equilibrio</div>
+      <div id="status" class="status ok"><span></span> Equilibrada</div>
     </header>
 
-    <section class="workspace">
-      <aside class="panel controls">
-        <div class="mode-switch">
-          <button id="modeSliders" class="active">Sliders</button>
-          <button id="modeMasses">30 masas</button>
-        </div>
-
-        <div id="sliderMode">
-          <h2>Entradas</h2>
-          <p class="hint">Solo se editan m₁, m₂, r₁ y r₂. El sistema calcula m₃ y r₃.</p>
-
-          <label>Masa m₁ <output id="m1Out">5.00 g</output></label>
-          <input id="m1" type="range" min="4.47" max="5.65" value="5.00" step="0.01"/>
-
-          <label>Masa m₂ <output id="m2Out">5.00 g</output></label>
-          <input id="m2" type="range" min="4.47" max="5.65" value="5.00" step="0.01"/>
-
-          <div class="vector-card">
-            <strong>r₁</strong>
-            <label>Radio <output id="r1Out">8.0 cm</output></label>
-            <input id="r1" type="range" min="4" max="12" value="8" step="0.1"/>
-            <label>Ángulo <output id="a1Out">140°</output></label>
-            <input id="a1" type="range" min="-180" max="180" value="140" step="1"/>
+    <section class="layout">
+      <aside class="controls" id="controls">
+        <section class="control-section compact">
+          <div class="section-head">
+            <h2>Torre</h2>
+            <button class="mini-reset" id="resetTower" title="Reiniciar solo la posición de la torre">Reiniciar torre</button>
           </div>
+          <label class="select-row">Modelo
+            <select id="towerModel">
+              <option value="prototype">Prototipo 3 varillas</option>
+              <option value="lattice">Celosía triangular</option>
+              <option value="mast">Mástil reforzado</option>
+            </select>
+          </label>
+          <label>Altura <output id="heightOut">34 cm</output></label>
+          <input id="height" type="range" min="10" max="100" value="34" step="1" />
+        </section>
 
-          <div class="vector-card">
-            <strong>r₂</strong>
-            <label>Radio <output id="r2Out">8.0 cm</output></label>
-            <input id="r2" type="range" min="4" max="12" value="8" step="0.1"/>
-            <label>Ángulo <output id="a2Out">40°</output></label>
-            <input id="a2" type="range" min="-180" max="180" value="40" step="1"/>
+        <section class="control-section">
+          <div class="section-head">
+            <h2>Masas</h2>
+            <button class="mini-reset" id="resetMasses">Reiniciar masas</button>
           </div>
-        </div>
-
-        <div id="massMode" hidden>
-          <h2>Masas predefinidas</h2>
-          <p class="hint">Arrastra una masa a una polea o al extremo de su cuerda en la escena.</p>
-          <div id="massTray" class="mass-tray"></div>
-          <div class="assigned">
-            <button data-slot="0">m₁: <span id="slot0">sin masa</span> ✕</button>
-            <button data-slot="1">m₂: <span id="slot1">sin masa</span> ✕</button>
-            <button data-slot="2">m₃ usada: <span id="slot2">sin masa</span> ✕</button>
+          <div class="slider-row mass m1">
+            <label>m₁ <output id="m1Out">5.00 g</output></label>
+            <input id="m1" type="range" min="0.50" max="20" value="5.00" step="0.01" />
           </div>
-          <p class="hint">m₃ ideal se calcula automáticamente; si colocas otra masa en el cable 3, aparecerá un momento residual y la torre se inclinará.</p>
-        </div>
+          <div class="slider-row mass m2">
+            <label>m₂ <output id="m2Out">5.00 g</output></label>
+            <input id="m2" type="range" min="0.50" max="20" value="5.00" step="0.01" />
+          </div>
+          <div class="slider-row mass m3">
+            <label>m₃ <output id="m3Out">5.00 g</output></label>
+            <input id="m3" type="range" min="0.50" max="30" value="5.00" step="0.01" />
+          </div>
+        </section>
 
-        <div class="results">
-          <h2>Resultado</h2>
-          <div><span>m₃ ideal</span><b id="m3Result">—</b></div>
-          <div><span>r₃</span><b id="r3Result">—</b></div>
-          <div><span>|ΣM₀|</span><b id="momentResult">—</b></div>
-        </div>
+        <section class="control-section">
+          <div class="section-head">
+            <h2>Poleas · vectores rᵢ</h2>
+            <button class="mini-reset" id="resetPulleys">Reiniciar poleas</button>
+          </div>
+          <p class="hint">Origen en la rótula. 0° = +x y 90° = +z. Radio máximo: 20 cm.</p>
+
+          <article class="vector-card v1">
+            <div class="vector-title"><span>P1</span><b>r₁</b><output id="r1VecOut">(−14.7, 8.5) cm</output></div>
+            <label>Radio <output id="r1Out">17.0 cm</output></label>
+            <input id="r1" type="range" min="2" max="20" value="17" step="0.1" />
+            <label>Ángulo <output id="a1Out">150°</output></label>
+            <input id="a1" type="range" min="0" max="359" value="150" step="1" />
+          </article>
+
+          <article class="vector-card v2">
+            <div class="vector-title"><span>P2</span><b>r₂</b><output id="r2VecOut">(14.7, 8.5) cm</output></div>
+            <label>Radio <output id="r2Out">17.0 cm</output></label>
+            <input id="r2" type="range" min="2" max="20" value="17" step="0.1" />
+            <label>Ángulo <output id="a2Out">30°</output></label>
+            <input id="a2" type="range" min="0" max="359" value="30" step="1" />
+          </article>
+
+          <article class="vector-card v3">
+            <div class="vector-title"><span>P3</span><b>r₃</b><output id="r3VecOut">(0.0, −17.0) cm</output></div>
+            <label>Radio <output id="r3Out">17.0 cm</output></label>
+            <input id="r3" type="range" min="2" max="20" value="17" step="0.1" />
+            <label>Ángulo <output id="a3Out">270°</output></label>
+            <input id="a3" type="range" min="0" max="359" value="270" step="1" />
+          </article>
+
+          <button id="calcBalance" class="primary">Calcular equilibrio con r₃ actual</button>
+          <p class="hint center">Este botón sí modifica m₃ y la dirección de r₃. Todos los demás cambios se actualizan automáticamente.</p>
+        </section>
+
+        <section class="control-section results">
+          <h2>Lectura instantánea</h2>
+          <div><span>Momento residual</span><b id="momentOut">0 N·m</b></div>
+          <div><span>Inclinación</span><b id="tiltOut">0.0°</b></div>
+          <div><span>m₃ de equilibrio</span><b id="idealM3Out">5.00 g</b></div>
+          <div><span>r₃ de equilibrio</span><b id="idealR3Out">—</b></div>
+        </section>
+
+        <section class="control-section reset-all-box">
+          <button id="resetAll" class="danger-ghost">Reiniciar todo</button>
+        </section>
       </aside>
 
-      <section class="scene-wrap">
+      <section class="viewport-wrap">
         <canvas id="scene"></canvas>
 
-        <div class="scene-buttons left">
-          <button id="rotHorizontal">↔ Horizontal</button>
-          <button id="rotVertical">↕ Vertical</button>
+        <div class="camera-toolbar mode-toolbar">
+          <span>Rotación</span>
+          <button id="rotH">↔ Horizontal</button>
+          <button id="rotV">↕ Vertical</button>
           <button id="rotFree" class="active">⤢ Libre</button>
         </div>
-        <div class="scene-buttons right">
-          <button id="zoomIn">＋</button>
-          <button id="zoomOut">−</button>
-          <button id="resetView">⌂</button>
-          <button id="toggleDCL">DCL</button>
+
+        <div class="camera-toolbar view-toolbar">
+          <button id="zoomIn" title="Acercar">＋</button>
+          <button id="zoomOut" title="Alejar">−</button>
+          <button id="resetCamera" title="Reiniciar cámara">⌂</button>
+          <button id="toggleDCL" title="Mostrar/ocultar DCL">DCL</button>
         </div>
 
-        <div id="dropHint" class="drop-hint">Suelta sobre una polea</div>
-        <div id="dclLegend" class="dcl-legend" hidden>
-          <b>Diagrama de cuerpo libre</b>
-          <span><i class="c1"></i>T₁</span>
-          <span><i class="c2"></i>T₂</span>
-          <span><i class="c3"></i>T₃</span>
-          <span><i class="cw"></i>W</span>
-          <span><i class="cr"></i>Rótula</span>
+        <div class="scene-note">Arrastra la escena según el modo de rotación seleccionado.</div>
+
+        <aside id="dclPanel" class="dcl-panel" hidden>
+          <div class="dcl-title"><b>DCL · componentes</b><span>x, z y peso j</span></div>
+          <div class="dcl-grid">
+            <div class="dcl-row h"><span>Fuerza</span><span>x [N]</span><span>z [N]</span></div>
+            <div class="dcl-row t1"><span>T₁</span><b id="t1x">0</b><b id="t1z">0</b></div>
+            <div class="dcl-row t2"><span>T₂</span><b id="t2x">0</b><b id="t2z">0</b></div>
+            <div class="dcl-row t3"><span>T₃</span><b id="t3x">0</b><b id="t3z">0</b></div>
+            <div class="dcl-row reaction"><span>Rótula R</span><b id="rx">0</b><b id="rz">0</b></div>
+          </div>
+          <div class="weight-row"><span>Peso</span><b id="wj">−0.000 j N</b></div>
+          <p>Las flechas del DCL muestran Tᵢx, Tᵢz, Rₓ, R_z y Wj. No se dibujan las componentes verticales de las tensiones, tal como se pidió.</p>
+        </aside>
+
+        <div class="legend">
+          <span><i class="l1"></i>r₁</span><span><i class="l2"></i>r₂</span><span><i class="l3"></i>r₃</span>
+          <span><i class="rope"></i>cuerdas</span>
         </div>
       </section>
     </section>
-
-    <section class="mobile-results">
-      <span>m₃ ideal <b id="m3Mobile">—</b></span>
-      <span>r₃ <b id="r3Mobile">—</b></span>
-    </section>
   </main>
 
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js"
-    }
-  }
-  </script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>

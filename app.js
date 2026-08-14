@@ -1,353 +1,161 @@
-
-import * as THREE from 'three';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
+import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
 
 const G = 9.81;
-const H = 0.34;
-const R3_FIXED = 0.08; // radio experimental fijo para la polea 3
-const TOWER_MASS = 0.085; // kg, valor visual/dinámico aproximado
-const MASSES_G = [5.18394, 4.77344, 5.32001, 5.37805, 4.49533, 4.6934, 5.12995, 4.99438, 5.08579, 4.83051, 5.35937, 5.32836, 5.11108, 5.43503, 5.23364, 4.8286, 5.20349, 4.7982, 5.35908, 5.07568, 5.03449, 4.88305, 5.46413, 5.04375, 4.96016, 4.98342, 5.25342, 5.20248, 5.21691, 5.22244];
+const BASE_RADIUS = 0.20;
+const BASE_THICK = 0.018;
+const PIVOT_Y = BASE_THICK / 2 + 0.018;
+const DEFAULTS = {
+  model:'prototype', hCm:34,
+  m1g:5.00,m2g:5.00,m3g:5.00,
+  r1cm:17,a1:150,r2cm:17,a2:30,r3cm:17,a3:270
+};
+const MODEL_INFO = {
+  prototype:{name:'Prototipo 3 varillas',mass:0.024,comFrac:0.30,color:0xb88042},
+  lattice:{name:'Celosía triangular',mass:0.030,comFrac:0.34,color:0xa96f35},
+  mast:{name:'Mástil reforzado',mass:0.036,comFrac:0.38,color:0x9d6938}
+};
 
-const canvas = document.getElementById('scene');
-const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:false});
+const $ = id => document.getElementById(id);
+const canvas = $('scene');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf2f6fb);
-scene.fog = new THREE.Fog(0xf2f6fb, 1.1, 2.2);
+scene.background = new THREE.Color(0xeef4f8);
+scene.fog = new THREE.Fog(0xeef4f8, 1.35, 2.4);
+const camera = new THREE.PerspectiveCamera(42,1,0.01,5);
+let cam = {radius:0.78,yaw:0.72,pitch:0.48,mode:'free'};
 
-const camera = new THREE.PerspectiveCamera(42,1,0.01,10);
-let camRadius=0.78, camYaw=0.72, camPitch=0.56;
-let rotationMode='free';
+scene.add(new THREE.HemisphereLight(0xffffff,0x8797a4,2.0));
+const sun = new THREE.DirectionalLight(0xffffff,3.5); sun.position.set(.5,.9,.4); sun.castShadow=true; sun.shadow.mapSize.set(2048,2048); scene.add(sun);
+const warm = new THREE.DirectionalLight(0xffddb5,1.1); warm.position.set(-.45,.35,-.3); scene.add(warm);
 
-const ambient = new THREE.HemisphereLight(0xffffff,0x8aa0b5,2.0); scene.add(ambient);
-const key = new THREE.DirectionalLight(0xffffff,3.2); key.position.set(0.5,0.8,0.35); key.castShadow=true; scene.add(key);
-const fill = new THREE.DirectionalLight(0xffe1bd,1.0); fill.position.set(-0.4,0.3,-0.2); scene.add(fill);
+const world = new CANNON.World({gravity:new CANNON.Vec3(0,-G,0)});
+world.broadphase = new CANNON.SAPBroadphase(world);
+world.allowSleep = true;
+world.solver.iterations = 14;
+world.defaultContactMaterial.friction = 0.45;
 
-function woodTexture(){
-  const c=document.createElement('canvas'); c.width=c.height=512;
-  const x=c.getContext('2d');
-  x.fillStyle='#caa06d'; x.fillRect(0,0,512,512);
-  for(let i=0;i<120;i++){
-    const y=Math.random()*512;
-    x.strokeStyle=`rgba(92,54,23,${0.03+Math.random()*0.07})`;
-    x.lineWidth=0.5+Math.random()*2; x.beginPath(); x.moveTo(0,y);
-    x.bezierCurveTo(140,y+Math.random()*12-6,340,y+Math.random()*12-6,512,y); x.stroke();
-  }
-  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t;
-}
-const wood = woodTexture();
+const groundBody = new CANNON.Body({mass:0}); world.addBody(groundBody);
+let towerBody=null, towerConstraint=null, towerVisual=null;
+let towerMass=MODEL_INFO.prototype.mass, towerCom=0.1, towerH=0.34;
+let previousVel = new CANNON.Vec3();
+let smoothAccel = new THREE.Vector3();
 
-const base = new THREE.Mesh(new THREE.BoxGeometry(0.38,0.018,0.38),
-  new THREE.MeshStandardMaterial({map:wood,roughness:.76,metalness:.02}));
-base.position.y=-0.012; base.receiveShadow=true; scene.add(base);
+function makeWoodTexture(){
+  const c=document.createElement('canvas'); c.width=c.height=768; const x=c.getContext('2d');
+  const g=x.createLinearGradient(0,0,768,768); g.addColorStop(0,'#e2bd8d');g.addColorStop(.5,'#d3a36a');g.addColorStop(1,'#c28e55');x.fillStyle=g;x.fillRect(0,0,768,768);
+  for(let i=0;i<180;i++){const y=Math.random()*768;x.beginPath();x.strokeStyle=`rgba(91,53,24,${0.025+Math.random()*.07})`;x.lineWidth=.5+Math.random()*2;x.moveTo(0,y);x.bezierCurveTo(180,y+Math.random()*12-6,500,y+Math.random()*12-6,768,y+Math.random()*8-4);x.stroke();}
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; t.wrapS=t.wrapT=THREE.RepeatWrapping; return t;
+}
+const woodTex=makeWoodTexture();
+const baseMat=new THREE.MeshStandardMaterial({map:woodTex,roughness:.72,metalness:.03});
+const base=new THREE.Mesh(new THREE.CylinderGeometry(BASE_RADIUS,BASE_RADIUS,BASE_THICK,96),baseMat);base.position.y=0;base.receiveShadow=true;base.castShadow=true;scene.add(base);
+const edge=new THREE.LineSegments(new THREE.EdgesGeometry(base.geometry),new THREE.LineBasicMaterial({color:0x805b35,transparent:true,opacity:.65}));base.add(edge);
 
-const baseEdge = new THREE.LineSegments(new THREE.EdgesGeometry(base.geometry), new THREE.LineBasicMaterial({color:0x725333}));
-base.add(baseEdge);
+// Plano polar real: radios, circunferencias y marcas cada 10°.
+const polarGroup=new THREE.Group(); polarGroup.position.y=BASE_THICK/2+.0007; scene.add(polarGroup);
+const polarLineMat=new THREE.LineBasicMaterial({color:0x40566a,transparent:true,opacity:.28});
+const polarMajorMat=new THREE.LineBasicMaterial({color:0x243b53,transparent:true,opacity:.48});
+function circleLine(r,segments=128,mat=polarLineMat){const pts=[];for(let i=0;i<=segments;i++){const a=2*Math.PI*i/segments;pts.push(new THREE.Vector3(r*Math.cos(a),0,r*Math.sin(a)))}const g=new THREE.BufferGeometry().setFromPoints(pts);return new THREE.Line(g,mat)}
+for(let r=.02;r<=BASE_RADIUS+.0001;r+=.02) polarGroup.add(circleLine(r,128,Math.abs((r*100)%10)<.01?polarMajorMat:polarLineMat));
+for(let deg=0;deg<360;deg+=10){const a=THREE.MathUtils.degToRad(deg);const mat=deg%30===0?polarMajorMat:polarLineMat;const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(BASE_RADIUS*Math.cos(a),0,BASE_RADIUS*Math.sin(a))]);polarGroup.add(new THREE.Line(g,mat));}
+function textSprite(text,{color='#18324a',bg='rgba(255,255,255,.78)',font=42,scale=.025}={}){const c=document.createElement('canvas');c.width=256;c.height=96;const x=c.getContext('2d');x.font=`700 ${font}px Arial`;x.textAlign='center';x.textBaseline='middle';if(bg){x.fillStyle=bg;x.roundRect(4,7,248,82,16);x.fill();}x.fillStyle=color;x.fillText(text,128,50);const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;const s=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false}));s.scale.set(scale*2.66,scale,1);s.renderOrder=20;return s}
+for(let deg=0;deg<360;deg+=10){const a=THREE.MathUtils.degToRad(deg);const s=textSprite(`${deg}°`,{font:34,scale:.015,bg:'rgba(255,255,255,.58)'});s.position.set(.188*Math.cos(a),.003,.188*Math.sin(a));polarGroup.add(s)}
 
-// Rótula
-const socket = new THREE.Mesh(new THREE.CylinderGeometry(.037,.045,.018,48),
- new THREE.MeshStandardMaterial({color:0xbfc7ce,metalness:.8,roughness:.22}));
-socket.position.y=.008; socket.castShadow=true; scene.add(socket);
-const ball = new THREE.Mesh(new THREE.SphereGeometry(.017,32,20),
- new THREE.MeshStandardMaterial({color:0xd9dee2,metalness:.9,roughness:.12}));
-ball.position.y=.024; ball.castShadow=true; scene.add(ball);
+// Rótula: visualmente unida a la torre; físicamente es una articulación esférica sin momento.
+const socketMat=new THREE.MeshStandardMaterial({color:0xb8c0c7,metalness:.9,roughness:.2});
+const socketBase=new THREE.Mesh(new THREE.CylinderGeometry(.034,.042,.016,48),socketMat);socketBase.position.y=BASE_THICK/2+.008;socketBase.castShadow=true;scene.add(socketBase);
+const ball=new THREE.Mesh(new THREE.SphereGeometry(.015,36,24),new THREE.MeshStandardMaterial({color:0xdfe4e8,metalness:.95,roughness:.12}));ball.position.y=PIVOT_Y;ball.castShadow=true;scene.add(ball);
 
-// tower group rotates about O
-const towerPivot = new THREE.Group(); towerPivot.position.set(0,.024,0); scene.add(towerPivot);
-const towerGeom = new THREE.Group(); towerPivot.add(towerGeom);
-const dowelMat = new THREE.MeshStandardMaterial({color:0xb78043,roughness:.65});
-const glueMat = new THREE.MeshStandardMaterial({color:0xe9e5dc,roughness:.7});
+function cylinderBetween(a,b,r,mat,parent){const dir=b.clone().sub(a),len=dir.length();const mesh=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,10),mat);mesh.position.copy(a).add(b).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir.normalize());mesh.castShadow=true;parent.add(mesh);return mesh}
+function buildTowerVisual(model,h,com){
+  if(towerVisual) scene.remove(towerVisual);
+  towerVisual=new THREE.Group(); scene.add(towerVisual);
+  const info=MODEL_INFO[model], dowel=new THREE.MeshStandardMaterial({color:info.color,roughness:.62}), brace=new THREE.MeshStandardMaterial({color:0xc69a63,roughness:.72}), glue=new THREE.MeshStandardMaterial({color:0xf0ece5,roughness:.75}), markerMat=new THREE.MeshStandardMaterial({color:0x244fca,roughness:.35});
+  const y0=-com, yt=h-com, r0=Math.min(.042,.026+h*.045);
+  const feet=[];for(let k=0;k<3;k++){const a=2*Math.PI*k/3+Math.PI/2;feet.push(new THREE.Vector3(r0*Math.cos(a),y0,r0*Math.sin(a)))}
+  const top=new THREE.Vector3(0,yt,0);
+  feet.forEach(p=>cylinderBetween(p,top,.0028,dowel,towerVisual));
+  const levels=model==='prototype'?[.16,.35,.56]:model==='lattice'?[.13,.27,.42,.58,.73]:[.18,.36,.54,.72];
+  levels.forEach(fr=>{const y=y0+h*fr,rr=r0*(1-fr*.93),pts=[];for(let k=0;k<3;k++){const a=2*Math.PI*k/3+Math.PI/2;pts.push(new THREE.Vector3(rr*Math.cos(a),y,rr*Math.sin(a)))}for(let k=0;k<3;k++)cylinderBetween(pts[k],pts[(k+1)%3],.0016,brace,towerVisual)});
+  if(model==='lattice'){for(let k=0;k<3;k++){for(let q=0;q<4;q++){const f1=.12+q*.18,f2=f1+.18;const a=2*Math.PI*k/3+Math.PI/2;const b=2*Math.PI*((k+1)%3)/3+Math.PI/2;const p1=new THREE.Vector3(r0*(1-f1*.93)*Math.cos(a),y0+h*f1,r0*(1-f1*.93)*Math.sin(a));const p2=new THREE.Vector3(r0*(1-f2*.93)*Math.cos(b),y0+h*f2,r0*(1-f2*.93)*Math.sin(b));cylinderBetween(p1,p2,.00125,brace,towerVisual)}}}
+  if(model==='mast'){const inner=.012;for(let k=0;k<3;k++){const a=2*Math.PI*k/3+Math.PI/2;cylinderBetween(new THREE.Vector3(inner*Math.cos(a),y0+.025,inner*Math.sin(a)),new THREE.Vector3(0,yt-.02,0),.0015,brace,towerVisual)}}
+  const marker=new THREE.Mesh(new THREE.CylinderGeometry(.011,.011,Math.min(.095,h*.34),20),markerMat);marker.position.set(0,y0+Math.min(.10,h*.35),0);marker.castShadow=true;towerVisual.add(marker);
+  const cap=new THREE.Mesh(new THREE.CylinderGeometry(.012,.012,.019,24),glue);cap.position.copy(top);cap.castShadow=true;towerVisual.add(cap);
+  // pequeño cuello desde la bola al entramado: conexión visual inequívoca
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(.006,.009,.025,20),socketMat);neck.position.y=y0+.0125;towerVisual.add(neck);
+}
+function rebuildTower({preserveOrientation=false}={}){
+  const model=$('towerModel').value,h=+$('height').value/100,info=MODEL_INFO[model],com=h*info.comFrac;
+  let q=new CANNON.Quaternion(),av=new CANNON.Vec3(); if(preserveOrientation&&towerBody){q.copy(towerBody.quaternion);av.copy(towerBody.angularVelocity)}
+  if(towerConstraint) world.removeConstraint(towerConstraint); if(towerBody) world.removeBody(towerBody);
+  towerH=h;towerCom=com;towerMass=info.mass*(.72+.28*h/.34);
+  towerBody=new CANNON.Body({mass:towerMass,position:new CANNON.Vec3(0,PIVOT_Y+com,0),angularDamping:.56,linearDamping:.16});
+  towerBody.addShape(new CANNON.Box(new CANNON.Vec3(.018,h*.5,.018)),new CANNON.Vec3(0,h*.5-com,0));
+  if(preserveOrientation){towerBody.quaternion.copy(q);towerBody.angularVelocity.copy(av)}
+  world.addBody(towerBody);
+  towerConstraint=new CANNON.PointToPointConstraint(towerBody,new CANNON.Vec3(0,-com,0),groundBody,new CANNON.Vec3(0,PIVOT_Y,0),1e7);world.addConstraint(towerConstraint);
+  previousVel.copy(towerBody.velocity);smoothAccel.set(0,0,0);buildTowerVisual(model,h,com);syncTowerVisual();
+}
+function syncTowerVisual(){if(!towerBody||!towerVisual)return;towerVisual.position.set(towerBody.position.x,towerBody.position.y,towerBody.position.z);towerVisual.quaternion.set(towerBody.quaternion.x,towerBody.quaternion.y,towerBody.quaternion.z,towerBody.quaternion.w)}
 
-function cylinderBetween(a,b,r,mat,parent=towerGeom){
-  const mid=a.clone().add(b).multiplyScalar(.5), d=a.distanceTo(b);
-  const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,d,10),mat);
-  m.position.copy(mid); m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), b.clone().sub(a).normalize());
-  m.castShadow=true; parent.add(m); return m;
+// Poleas, cuerdas, masas y etiquetas.
+const pulleyGroups=[],ropeLines=[],massGroups=[],labelSprites=[],massLabelSprites=[];const anchors=[new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3()];
+const vecColors=[0x2563eb,0xef4444,0x16a34a], ropeColor=0x1c5fb8;
+function buildPulley(i){const g=new THREE.Group();const metal=new THREE.MeshStandardMaterial({color:0xc5ccd1,metalness:.82,roughness:.25});const gold=new THREE.MeshStandardMaterial({color:0xb88a27,metalness:.78,roughness:.19});const foot=new THREE.Mesh(new THREE.BoxGeometry(.033,.006,.025),metal);foot.position.y=.003;foot.castShadow=true;g.add(foot);const cheek1=new THREE.Mesh(new THREE.BoxGeometry(.005,.025,.022),metal);cheek1.position.set(-.012,.015,0);g.add(cheek1);const cheek2=cheek1.clone();cheek2.position.x=.012;g.add(cheek2);const wheel=new THREE.Mesh(new THREE.TorusGeometry(.011,.0038,12,30),gold);wheel.rotation.y=Math.PI/2;wheel.position.y=.022;wheel.castShadow=true;g.add(wheel);const hub=new THREE.Mesh(new THREE.CylinderGeometry(.0035,.0035,.029,14),metal);hub.rotation.z=Math.PI/2;hub.position.y=.022;g.add(hub);scene.add(g);pulleyGroups[i]=g;
+  const lab=textSprite(`P${i+1}`,{color:i===0?'#2563eb':i===1?'#dc2626':'#15803d',font:44,scale:.022});scene.add(lab);labelSprites[i]=lab;
+  const mg=new THREE.Group();const mmat=new THREE.MeshStandardMaterial({color:0x687681,metalness:.58,roughness:.32});const cyl=new THREE.Mesh(new THREE.CylinderGeometry(.010,.011,.024,24),mmat);cyl.castShadow=true;mg.add(cyl);const ring=new THREE.Mesh(new THREE.TorusGeometry(.005,.0014,8,20),mmat);ring.rotation.x=Math.PI/2;ring.position.y=.014;mg.add(ring);scene.add(mg);massGroups[i]=mg;
+  const ml=textSprite(`m${i+1}`,{color:'#23384a',font:36,scale:.017,bg:'rgba(255,255,255,.82)'});scene.add(ml);massLabelSprites[i]=ml;
 }
-const topLocal = new THREE.Vector3(0,H,0);
-const footR=.035;
-for(let k=0;k<3;k++){
-  const a=2*Math.PI*k/3;
-  cylinderBetween(new THREE.Vector3(footR*Math.cos(a),0,footR*Math.sin(a)), topLocal, .003, dowelMat);
-}
-for(const y of [.07,.14,.21]){
-  const scale=1-y/H, rr=footR*scale;
-  const pts=[0,1,2].map(k=>new THREE.Vector3(rr*Math.cos(2*Math.PI*k/3),y,rr*Math.sin(2*Math.PI*k/3)));
-  for(let k=0;k<3;k++) cylinderBetween(pts[k],pts[(k+1)%3],.0018,dowelMat);
-}
-const topCap=new THREE.Mesh(new THREE.CylinderGeometry(.012,.012,.018,24),glueMat); topCap.position.copy(topLocal); towerGeom.add(topCap);
+for(let i=0;i<3;i++)buildPulley(i);
+function updateLine(slot,points,color=ropeColor){if(ropeLines[slot])scene.remove(ropeLines[slot]);const geo=new THREE.BufferGeometry().setFromPoints(points);const line=new THREE.Line(geo,new THREE.LineBasicMaterial({color,linewidth:1}));scene.add(line);ropeLines[slot]=line;return line}
+const rVectorGroup=new THREE.Group();scene.add(rVectorGroup);
+function polar(rCm,aDeg){const r=rCm/100,a=THREE.MathUtils.degToRad(aDeg);return new THREE.Vector3(r*Math.cos(a),BASE_THICK/2+.005,r*Math.sin(a))}
+function readState(){return {m:[+$('m1').value/1000,+$('m2').value/1000,+$('m3').value/1000],r:[+$('r1').value,+$('r2').value,+$('r3').value],a:[+$('a1').value,+$('a2').value,+$('a3').value],h:+$('height').value/100}}
+function topWorldThree(){const p=new CANNON.Vec3(0,towerH-towerCom,0),w=new CANNON.Vec3();towerBody.pointToWorldFrame(p,w);return new THREE.Vector3(w.x,w.y,w.z)}
+function cmWorldThree(){return new THREE.Vector3(towerBody.position.x,towerBody.position.y,towerBody.position.z)}
+function updateGeometry(){const s=readState();for(let i=0;i<3;i++){anchors[i].copy(polar(s.r[i],s.a[i]));pulleyGroups[i].position.copy(anchors[i]).setY(BASE_THICK/2+.004);pulleyGroups[i].rotation.y=-THREE.MathUtils.degToRad(s.a[i]);labelSprites[i].position.copy(anchors[i]).add(new THREE.Vector3(0,.046,0));const radial=new THREE.Vector3(anchors[i].x,0,anchors[i].z).normalize();const outsideR=Math.max(BASE_RADIUS+.032,s.r[i]/100+.035);const out=new THREE.Vector3(radial.x*outsideR,BASE_THICK/2+.028,radial.z*outsideR);const hang=new THREE.Vector3(out.x,-.075,out.z);updateLine(i,[topWorldThree(),anchors[i].clone().setY(BASE_THICK/2+.03),out,hang],ropeColor);massGroups[i].position.copy(hang).add(new THREE.Vector3(0,-.014,0));const massScale=.78+Math.min(1.25,s.m[i]/.008)*.18;massGroups[i].scale.setScalar(massScale);massLabelSprites[i].position.copy(hang).add(new THREE.Vector3(0,-.055,0));const labelTex=massLabelSprites[i].material.map.image,ctx=labelTex.getContext('2d');ctx.clearRect(0,0,labelTex.width,labelTex.height);ctx.fillStyle='rgba(255,255,255,.82)';ctx.roundRect(4,7,248,82,16);ctx.fill();ctx.font='700 32px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#23384a';ctx.fillText(`m${i+1} = ${(s.m[i]*1000).toFixed(2)} g`,128,50);massLabelSprites[i].material.map.needsUpdate=true}
+  while(rVectorGroup.children.length)rVectorGroup.remove(rVectorGroup.children[0]);for(let i=0;i<3;i++){const r=new THREE.Vector3(anchors[i].x,0,anchors[i].z);rVectorGroup.add(new THREE.ArrowHelper(r.clone().normalize(),new THREE.Vector3(0,BASE_THICK/2+.012,0),r.length(),vecColors[i],.012,.006))}
+  updateOutputs();updateDCLVisual();}
 
-// pulleys and masses
-const pulleyGroups=[new THREE.Group(),new THREE.Group(),new THREE.Group()];
-const massMeshes=[null,null,null], cableLines=[null,null,null], vectorLines=[null,null,null];
-const anchorPts=[new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3()];
-const colors=[0x2563eb,0xef4444,0x16a34a];
+// Equilibrio analítico. Se conserva el radio actual de r3 para cerrar la solución única.
+function idealSolution(){const s=readState(),H=s.h;const R1=polar(s.r[0],s.a[0]);R1.y=0;const R2=polar(s.r[1],s.a[1]);R2.y=0;const rho3=s.r[2]/100;const L1=Math.hypot(H,s.r[0]/100),L2=Math.hypot(H,s.r[1]/100),L3=Math.hypot(H,rho3);const q=R1.multiplyScalar(s.m[0]/L1).add(R2.multiplyScalar(s.m[1]/L2));const qmag=q.length();if(qmag<1e-12)return {m3:0,r3:new THREE.Vector3(rho3,0,0),a3:0};const r3=q.clone().normalize().multiplyScalar(-rho3);const m3=L3*qmag/rho3;let a3=THREE.MathUtils.radToDeg(Math.atan2(r3.z,r3.x));if(a3<0)a3+=360;return {m3,r3,a3}}
+function calcEquilibrium(){const sol=idealSolution();$('m3').value=Math.min(30,Math.max(.5,sol.m3*1000));$('a3').value=Math.round(sol.a3);resetTowerPose();updateGeometry()}
 
-function makePulley(group){
-  const standMat=new THREE.MeshStandardMaterial({color:0xbfc6cc,metalness:.78,roughness:.25});
-  const wheelMat=new THREE.MeshStandardMaterial({color:0xc79b34,metalness:.75,roughness:.2});
-  const foot=new THREE.Mesh(new THREE.BoxGeometry(.034,.006,.025),standMat); foot.position.y=.006; foot.castShadow=true; group.add(foot);
-  const wheel=new THREE.Mesh(new THREE.TorusGeometry(.012,.004,12,28),wheelMat); wheel.rotation.y=Math.PI/2; wheel.position.y=.024; wheel.castShadow=true; group.add(wheel);
-  const hub=new THREE.Mesh(new THREE.CylinderGeometry(.004,.004,.012,16),standMat); hub.rotation.z=Math.PI/2; hub.position.y=.024; group.add(hub);
-}
-pulleyGroups.forEach(g=>{makePulley(g);scene.add(g)});
+function cableForce(i){const s=readState(),top=topWorldThree(),anchor=anchors[i].clone().setY(BASE_THICK/2+.03),dir=anchor.sub(top).normalize();return dir.multiplyScalar(s.m[i]*G)}
+function staticMomentMagnitude(){const s=readState();const top=new THREE.Vector3(0,s.h,0);let tau=new THREE.Vector3();for(let i=0;i<3;i++){const R=polar(s.r[i],s.a[i]);R.y=0;const anchor=R.clone().setY(BASE_THICK/2+.03);const F=anchor.sub(top).normalize().multiplyScalar(s.m[i]*G);tau.add(top.clone().cross(F))}return tau.length()}
+function applyCableForces(){const topLocal=new CANNON.Vec3(0,towerH-towerCom,0),topW=new CANNON.Vec3();towerBody.pointToWorldFrame(topLocal,topW);const s=readState();for(let i=0;i<3;i++){const a=anchors[i];const dir=new CANNON.Vec3(a.x-topW.x,(BASE_THICK/2+.03)-topW.y,a.z-topW.z);dir.normalize();dir.scale(s.m[i]*G,dir);towerBody.applyForce(dir,topW)}
+  // Tope mecánico suave: representa contacto/limitación física de la rótula y el tablero, no una gravedad artificial.
+  const up=new CANNON.Vec3(0,1,0);towerBody.quaternion.vmult(up,up);const tilt=Math.acos(Math.max(-1,Math.min(1,up.y)));const soft=THREE.MathUtils.degToRad(42);if(tilt>soft){const axis=new CANNON.Vec3(up.z,0,-up.x);if(axis.lengthSquared()>1e-10){axis.normalize();const k=0.045*(tilt-soft);axis.scale(-k,axis);towerBody.torque.vadd(axis,towerBody.torque)}}}
+function resetTowerPose(){if(!towerBody)return;towerBody.position.set(0,PIVOT_Y+towerCom,0);towerBody.quaternion.set(0,0,0,1);towerBody.velocity.set(0,0,0);towerBody.angularVelocity.set(0,0,0);towerBody.force.set(0,0,0);towerBody.torque.set(0,0,0);previousVel.copy(towerBody.velocity);smoothAccel.set(0,0,0);syncTowerVisual()}
 
-function makeMass(kg, color=0x6b7280){
-  const g=new THREE.Group();
-  const mat=new THREE.MeshStandardMaterial({color,metalness:.5,roughness:.35});
-  const cyl=new THREE.Mesh(new THREE.CylinderGeometry(.012,.012,.026,24),mat); cyl.castShadow=true; g.add(cyl);
-  const ring=new THREE.Mesh(new THREE.TorusGeometry(.006,.0015,8,20),mat); ring.rotation.x=Math.PI/2; ring.position.y=.018; g.add(ring);
-  g.userData.kg=kg; return g;
-}
+const dclGroup=new THREE.Group();scene.add(dclGroup);dclGroup.visible=false;let dclOn=false;
+function clearGroup(g){while(g.children.length)g.remove(g.children[0])}
+function addComponentArrow(origin,axisValue,axis,color,label){if(Math.abs(axisValue)<1e-5)return;const scale=.18,vec=new THREE.Vector3();vec[axis]=axisValue*scale;const ar=new THREE.ArrowHelper(vec.clone().normalize(),origin,Math.max(.025,vec.length()),color,.012,.006);dclGroup.add(ar);const s=textSprite(label,{color:'#17212b',font:38,scale:.017,bg:'rgba(255,255,255,.82)'});s.position.copy(origin).add(vec).add(new THREE.Vector3(0,.012,0));dclGroup.add(s)}
+function updateDCLVisual(){if(!towerBody)return;clearGroup(dclGroup);const top=topWorldThree(),cm=cmWorldThree();const Fs=[cableForce(0),cableForce(1),cableForce(2)];const weight=new THREE.Vector3(0,-towerMass*G,0);const a=smoothAccel.clone();const sumExt=Fs[0].clone().add(Fs[1]).add(Fs[2]).add(weight);const reaction=a.multiplyScalar(towerMass).sub(sumExt);const offsets=[-.018,0,.018];for(let i=0;i<3;i++){const o=top.clone().add(new THREE.Vector3(0,offsets[i],0));addComponentArrow(o,Fs[i].x,'x',vecColors[i],`T${i+1}x`);addComponentArrow(o,Fs[i].z,'z',vecColors[i],`T${i+1}z`)}addComponentArrow(new THREE.Vector3(0,PIVOT_Y,0),reaction.x,'x',0xf59e0b,'Rx');addComponentArrow(new THREE.Vector3(0,PIVOT_Y+.01,0),reaction.z,'z',0xf59e0b,'Rz');const wv=new THREE.Vector3(0,-Math.max(.035,towerMass*G*.18),0);dclGroup.add(new THREE.ArrowHelper(wv.clone().normalize(),cm,wv.length(),0x111827,.012,.006));const ws=textSprite('Wj',{font:38,scale:.017});ws.position.copy(cm).add(wv).add(new THREE.Vector3(0,.012,0));dclGroup.add(ws);
+  const f=n=>n.toFixed(3);$('t1x').textContent=f(Fs[0].x);$('t1z').textContent=f(Fs[0].z);$('t2x').textContent=f(Fs[1].x);$('t2z').textContent=f(Fs[1].z);$('t3x').textContent=f(Fs[2].x);$('t3z').textContent=f(Fs[2].z);$('rx').textContent=f(reaction.x);$('rz').textContent=f(reaction.z);$('wj').textContent=`${f(-towerMass*G)} j N`;}
 
-function setMassMesh(i,kg){
-  if(massMeshes[i]) scene.remove(massMeshes[i]);
-  if(!kg){massMeshes[i]=null;return}
-  const m=makeMass(kg, i===0?0x66788a:i===1?0x707b86:0x596674); massMeshes[i]=m; scene.add(m);
-}
+function updateOutputs(){const s=readState(),sol=idealSolution();const f=(v,n=1)=>Number(v).toFixed(n);$('heightOut').textContent=f(s.h*100,0)+' cm';for(let i=0;i<3;i++)$(`m${i+1}Out`).textContent=f(s.m[i]*1000,2)+' g';for(let i=0;i<3;i++){$(`r${i+1}Out`).textContent=f(s.r[i],1)+' cm';$(`a${i+1}Out`).textContent=f(s.a[i],0)+'°';const R=polar(s.r[i],s.a[i]);$(`r${i+1}VecOut`).textContent=`(${f(R.x*100,1)}, ${f(R.z*100,1)}) cm`}$('idealM3Out').textContent=f(sol.m3*1000,3)+' g';$('idealR3Out').textContent=`(${f(sol.r3.x*100,2)}, ${f(sol.r3.z*100,2)}) cm`;const M=staticMomentMagnitude();$('momentOut').textContent=M.toExponential(2)+' N·m';const up=new THREE.Vector3(0,1,0).applyQuaternion(towerVisual?.quaternion||new THREE.Quaternion());const tilt=THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(up.y,-1,1)));$('tiltOut').textContent=f(tilt,1)+'°';const scale=Math.max(1e-7,(s.m[0]+s.m[1]+s.m[2])*G*s.h),err=M/scale;const st=$('status');st.className='status '+(err<.003?'ok':err<.035?'warn':'bad');st.innerHTML=`<span></span>${err<.003?'Equilibrada':err<.035?'Ligera inclinación':'Desequilibrada'}`}
 
-function lineBetween(a,b,color,width=1){
-  const geo=new THREE.BufferGeometry().setFromPoints([a,b]);
-  return new THREE.Line(geo,new THREE.LineBasicMaterial({color,linewidth:width}));
-}
+function bindRealtime(){['m1','m2','m3','r1','a1','r2','a2','r3','a3'].forEach(id=>$(id).addEventListener('input',()=>{updateGeometry()}));$('height').addEventListener('input',()=>{rebuildTower({preserveOrientation:false});updateGeometry()});$('towerModel').addEventListener('change',()=>{rebuildTower({preserveOrientation:false});updateGeometry()});}
+$('calcBalance').addEventListener('click',calcEquilibrium);
+$('resetTower').addEventListener('click',()=>{resetTowerPose();updateGeometry()});
+$('resetPulleys').addEventListener('click',()=>{for(const [id,v] of [['r1',DEFAULTS.r1cm],['a1',DEFAULTS.a1],['r2',DEFAULTS.r2cm],['a2',DEFAULTS.a2],['r3',DEFAULTS.r3cm],['a3',DEFAULTS.a3]])$(id).value=v;updateGeometry()});
+$('resetMasses').addEventListener('click',()=>{for(const [id,v] of [['m1',DEFAULTS.m1g],['m2',DEFAULTS.m2g],['m3',DEFAULTS.m3g]])$(id).value=v;updateGeometry()});
+$('resetAll').addEventListener('click',()=>{$('towerModel').value=DEFAULTS.model;$('height').value=DEFAULTS.hCm;for(const [id,v] of Object.entries({m1:DEFAULTS.m1g,m2:DEFAULTS.m2g,m3:DEFAULTS.m3g,r1:DEFAULTS.r1cm,a1:DEFAULTS.a1,r2:DEFAULTS.r2cm,a2:DEFAULTS.a2,r3:DEFAULTS.r3cm,a3:DEFAULTS.a3}))$(id).value=v;cam={radius:.78,yaw:.72,pitch:.48,mode:'free'};setRotationMode('free');dclOn=false;dclGroup.visible=false;$('dclPanel').hidden=true;$('toggleDCL').classList.remove('active');rebuildTower();updateGeometry()});
 
-function updateCable(i,a,b){
-  if(cableLines[i]) scene.remove(cableLines[i]);
-  cableLines[i]=lineBetween(a,b,colors[i]); scene.add(cableLines[i]);
-}
+function setRotationMode(mode){cam.mode=mode;$('rotH').classList.toggle('active',mode==='h');$('rotV').classList.toggle('active',mode==='v');$('rotFree').classList.toggle('active',mode==='free')}
+$('rotH').onclick=()=>setRotationMode('h');$('rotV').onclick=()=>setRotationMode('v');$('rotFree').onclick=()=>setRotationMode('free');$('zoomIn').onclick=()=>cam.radius=Math.max(.40,cam.radius-.07);$('zoomOut').onclick=()=>cam.radius=Math.min(1.35,cam.radius+.07);$('resetCamera').onclick=()=>{cam.radius=.78;cam.yaw=.72;cam.pitch=.48};$('toggleDCL').onclick=()=>{dclOn=!dclOn;dclGroup.visible=dclOn;$('dclPanel').hidden=!dclOn;$('toggleDCL').classList.toggle('active',dclOn)};
+let drag=false,lastX=0,lastY=0,pinchDist=null;canvas.addEventListener('pointerdown',e=>{drag=true;lastX=e.clientX;lastY=e.clientY;canvas.setPointerCapture(e.pointerId)});canvas.addEventListener('pointerup',()=>drag=false);canvas.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-lastX,dy=e.clientY-lastY;lastX=e.clientX;lastY=e.clientY;if(cam.mode==='h'||cam.mode==='free')cam.yaw-=dx*.008;if(cam.mode==='v'||cam.mode==='free')cam.pitch=THREE.MathUtils.clamp(cam.pitch-dy*.006,.10,1.33)});canvas.addEventListener('wheel',e=>{e.preventDefault();cam.radius=THREE.MathUtils.clamp(cam.radius+e.deltaY*.0007,.40,1.35)},{passive:false});
+function updateCamera(){camera.position.set(cam.radius*Math.sin(cam.yaw)*Math.cos(cam.pitch),.12+cam.radius*Math.sin(cam.pitch),cam.radius*Math.cos(cam.yaw)*Math.cos(cam.pitch));camera.lookAt(0,Math.min(.30,towerH*.42),0)}
+function resize(){const rect=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(rect.width)),h=Math.max(1,Math.round(rect.height));if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}}
 
-function arrow(origin, vec, color){
-  const len=vec.length(); if(len<1e-6) return new THREE.Group();
-  return new THREE.ArrowHelper(vec.clone().normalize(),origin,len,color,Math.min(.025,len*.22),Math.min(.012,len*.12));
-}
-const dclGroup=new THREE.Group(); scene.add(dclGroup); dclGroup.visible=false;
+function physicsStep(dt){if(!towerBody)return;applyCableForces();world.step(1/120,dt,4);const acc=new THREE.Vector3((towerBody.velocity.x-previousVel.x)/Math.max(dt,1e-4),(towerBody.velocity.y-previousVel.y)/Math.max(dt,1e-4),(towerBody.velocity.z-previousVel.z)/Math.max(dt,1e-4));smoothAccel.lerp(acc,.08);previousVel.copy(towerBody.velocity);syncTowerVisual();}
+let last=performance.now();function animate(now){requestAnimationFrame(animate);resize();updateCamera();const dt=Math.min(.025,Math.max(.001,(now-last)/1000));last=now;physicsStep(dt);updateGeometry();renderer.render(scene,camera)}
 
-let mode='sliders';
-let assigned=[null,null,null]; // kg
-let data={m1:.005,m2:.005,r1:.08,a1:140,r2:.08,a2:40,m3Ideal:0,r3:new THREE.Vector3(),m3Used:0};
-let omega = new THREE.Vector3();
-let qTower = new THREE.Quaternion();
-let last=performance.now();
-
-function vecFromPolar(r,aDeg){
-  const a=THREE.MathUtils.degToRad(aDeg);
-  return new THREE.Vector3(r*Math.cos(a),0,r*Math.sin(a));
-}
-function solve(){
-  const R1=vecFromPolar(data.r1,data.a1), R2=vecFromPolar(data.r2,data.a2);
-  const L1=Math.sqrt(H*H+data.r1*data.r1), L2=Math.sqrt(H*H+data.r2*data.r2);
-  const q=R1.clone().multiplyScalar(data.m1/L1).add(R2.clone().multiplyScalar(data.m2/L2));
-  const qn=q.length();
-  let R3=new THREE.Vector3(-R3_FIXED,0,0), m3=0;
-  if(qn>1e-9){R3=q.clone().multiplyScalar(-R3_FIXED/qn); const L3=Math.sqrt(H*H+R3_FIXED*R3_FIXED); m3=L3*qn/R3_FIXED;}
-  data.m3Ideal=m3; data.r3=R3;
-  data.m3Used = mode==='masses' ? (assigned[2] ?? m3) : m3;
-  return [R1,R2,R3];
-}
-function topWorld(){
-  const v=topLocal.clone().applyQuaternion(towerPivot.quaternion); return towerPivot.position.clone().add(v);
-}
-function cmWorld(){
-  const v=new THREE.Vector3(0,H*.48,0).applyQuaternion(towerPivot.quaternion); return towerPivot.position.clone().add(v);
-}
-function forceAtTop(anchor, massKg, top){
-  const dir=anchor.clone().sub(top).normalize(); return dir.multiplyScalar(massKg*G);
-}
-function torqueNow(){
-  const top=topWorld(), O=towerPivot.position;
-  const masses=[data.m1,data.m2,data.m3Used];
-  let tau=new THREE.Vector3(), sumF=new THREE.Vector3();
-  for(let i=0;i<3;i++){
-    const F=forceAtTop(anchorPts[i],masses[i],top); tau.add(top.clone().sub(O).cross(F)); sumF.add(F);
-  }
-  const cm=cmWorld(), W=new THREE.Vector3(0,-TOWER_MASS*G,0);
-  tau.add(cm.clone().sub(O).cross(W)); sumF.add(W);
-  return {tau,sumF};
-}
-function updateDCL(){
-  while(dclGroup.children.length) dclGroup.remove(dclGroup.children[0]);
-  const top=topWorld(), O=towerPivot.position, masses=[data.m1,data.m2,data.m3Used];
-  const scale=.05;
-  let sum=new THREE.Vector3();
-  for(let i=0;i<3;i++){
-    const F=forceAtTop(anchorPts[i],masses[i],top); sum.add(F);
-    dclGroup.add(arrow(top,F.clone().multiplyScalar(scale),colors[i]));
-  }
-  const W=new THREE.Vector3(0,-TOWER_MASS*G,0); sum.add(W);
-  dclGroup.add(arrow(cmWorld(),W.clone().multiplyScalar(scale),0x111827));
-  dclGroup.add(arrow(O,sum.clone().multiplyScalar(-scale),0xf59e0b));
-}
-
-function updateSceneGeometry(){
-  const [R1,R2,R3]=solve(); [R1,R2,R3].forEach((p,i)=>anchorPts[i].copy(p));
-  for(let i=0;i<3;i++){
-    pulleyGroups[i].position.copy(anchorPts[i]); pulleyGroups[i].rotation.y=Math.atan2(anchorPts[i].x,anchorPts[i].z);
-  }
-  const top=topWorld();
-  for(let i=0;i<3;i++){
-    updateCable(i,top,anchorPts[i].clone().setY(.025));
-    if(massMeshes[i]){
-      const a=anchorPts[i]; massMeshes[i].position.set(a.x,-.035,a.z);
-    }
-  }
-  updateDCL();
-  updateVectorDrawings(R1,R2,R3);
-  updateUI();
-}
-
-const rGroup=new THREE.Group(); scene.add(rGroup);
-function updateVectorDrawings(...rs){
-  while(rGroup.children.length) rGroup.remove(rGroup.children[0]);
-  const origin=new THREE.Vector3(0,.005,0);
-  rs.forEach((r,i)=>{rGroup.add(new THREE.ArrowHelper(r.clone().normalize(),origin,r.length(),colors[i],.012,.006))});
-}
-
-function residualStaticMoment(){
-  const [R1,R2,R3]=[vecFromPolar(data.r1,data.a1),vecFromPolar(data.r2,data.a2),data.r3.clone()];
-  const L=[Math.sqrt(H*H+data.r1**2),Math.sqrt(H*H+data.r2**2),Math.sqrt(H*H+R3_FIXED**2)];
-  const masses=[data.m1,data.m2,data.m3Used];
-  const q=R1.clone().multiplyScalar(masses[0]/L[0]).add(R2.clone().multiplyScalar(masses[1]/L[1])).add(R3.clone().multiplyScalar(masses[2]/L[2]));
-  return G*H*q.length();
-}
-
-function updateUI(){
-  const f=(x,n=2)=>Number(x).toFixed(n);
-  document.getElementById('m1Out').textContent=f(data.m1*1000)+' g';
-  document.getElementById('m2Out').textContent=f(data.m2*1000)+' g';
-  document.getElementById('r1Out').textContent=f(data.r1*100,1)+' cm';
-  document.getElementById('r2Out').textContent=f(data.r2*100,1)+' cm';
-  document.getElementById('a1Out').textContent=f(data.a1,0)+'°';
-  document.getElementById('a2Out').textContent=f(data.a2,0)+'°';
-  const m3=f(data.m3Ideal*1000,3)+' g';
-  const r3=`(${f(data.r3.x*100,2)}, ${f(data.r3.z*100,2)}) cm`;
-  document.getElementById('m3Result').textContent=m3; document.getElementById('m3Mobile').textContent=m3;
-  document.getElementById('r3Result').textContent=r3; document.getElementById('r3Mobile').textContent=r3;
-  const M=residualStaticMoment(); document.getElementById('momentResult').textContent=M.toExponential(2)+' N·m';
-  const pill=document.getElementById('statusPill');
-  const err=M/Math.max(1e-9,(data.m1+data.m2+data.m3Ideal)*G*H);
-  pill.className='status '+(err<.004?'ok':err<.03?'warn':'bad');
-  pill.textContent=err<.004?'Equilibrio':err<.03?'Ligera inclinación':'Desequilibrio';
-}
-
-function applyInputs(){
-  data.m1=+document.getElementById('m1').value/1000;
-  data.m2=+document.getElementById('m2').value/1000;
-  data.r1=+document.getElementById('r1').value/100;
-  data.r2=+document.getElementById('r2').value/100;
-  data.a1=+document.getElementById('a1').value;
-  data.a2=+document.getElementById('a2').value;
-  setMassMesh(0,data.m1); setMassMesh(1,data.m2); setMassMesh(2,data.m3Ideal||.005);
-  updateSceneGeometry();
-}
-['m1','m2','r1','r2','a1','a2'].forEach(id=>document.getElementById(id).addEventListener('input',applyInputs));
-
-function setMode(m){
-  mode=m;
-  document.getElementById('sliderMode').hidden=m!=='sliders';
-  document.getElementById('massMode').hidden=m!=='masses';
-  document.getElementById('modeSliders').classList.toggle('active',m==='sliders');
-  document.getElementById('modeMasses').classList.toggle('active',m==='masses');
-  if(m==='sliders'){
-    assigned=[null,null,null];
-    setMassMesh(0,data.m1); setMassMesh(1,data.m2); setMassMesh(2,data.m3Ideal);
-  }
-  updateSceneGeometry();
-}
-document.getElementById('modeSliders').onclick=()=>setMode('sliders');
-document.getElementById('modeMasses').onclick=()=>setMode('masses');
-
-const tray=document.getElementById('massTray');
-MASSES_G.forEach((g,i)=>{
-  const e=document.createElement('div'); e.className='mass-chip'; e.draggable=true; e.textContent=`#${i+1} · ${g.toFixed(3)} g`;
-  e.dataset.kg=(g/1000); e.addEventListener('dragstart',ev=>{ev.dataTransfer.setData('text/plain',e.dataset.kg);document.getElementById('dropHint').classList.add('show')});
-  e.addEventListener('dragend',()=>document.getElementById('dropHint').classList.remove('show')); tray.appendChild(e);
-});
-document.querySelectorAll('.assigned button').forEach(b=>b.onclick=()=>{
-  const i=+b.dataset.slot;assigned[i]=null;setMassMesh(i,null);if(i===0)data.m1=.005;if(i===1)data.m2=.005;updateSceneGeometry();updateSlots();
-});
-function updateSlots(){
-  assigned.forEach((v,i)=>document.getElementById('slot'+i).textContent=v?`${(v*1000).toFixed(3)} g`:'sin masa');
-}
-
-canvas.addEventListener('dragover',e=>e.preventDefault());
-canvas.addEventListener('drop',e=>{
-  e.preventDefault(); if(mode!=='masses') return;
-  const kg=parseFloat(e.dataTransfer.getData('text/plain')); if(!kg)return;
-  const rect=canvas.getBoundingClientRect();
-  const pts=anchorPts.map(p=>{
-    const v=p.clone().project(camera);
-    return {x:rect.left+(v.x*.5+.5)*rect.width,y:rect.top+(-v.y*.5+.5)*rect.height};
-  });
-  let best=0,bd=1e9; pts.forEach((p,i)=>{const d=(p.x-e.clientX)**2+(p.y-e.clientY)**2;if(d<bd){bd=d;best=i}});
-  assigned[best]=kg; setMassMesh(best,kg);
-  if(best===0)data.m1=kg; if(best===1)data.m2=kg;
-  updateSceneGeometry(); updateSlots(); document.getElementById('dropHint').classList.remove('show');
-});
-
-// Camera interaction: 3 modes
-let dragging=false,lastX=0,lastY=0;
-canvas.addEventListener('pointerdown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;canvas.setPointerCapture(e.pointerId)});
-canvas.addEventListener('pointerup',()=>dragging=false);
-canvas.addEventListener('pointermove',e=>{
-  if(!dragging)return; const dx=e.clientX-lastX,dy=e.clientY-lastY;lastX=e.clientX;lastY=e.clientY;
-  if(rotationMode==='horizontal'||rotationMode==='free') camYaw-=dx*.008;
-  if(rotationMode==='vertical'||rotationMode==='free') camPitch=Math.max(.12,Math.min(1.35,camPitch-dy*.006));
-});
-canvas.addEventListener('wheel',e=>{e.preventDefault();camRadius=Math.max(.45,Math.min(1.25,camRadius+e.deltaY*.0006))},{passive:false});
-function rotButton(id,modeName){
-  document.getElementById(id).onclick=()=>{rotationMode=modeName;['rotHorizontal','rotVertical','rotFree'].forEach(x=>document.getElementById(x).classList.remove('active'));document.getElementById(id).classList.add('active')};
-}
-rotButton('rotHorizontal','horizontal');rotButton('rotVertical','vertical');rotButton('rotFree','free');
-document.getElementById('zoomIn').onclick=()=>camRadius=Math.max(.45,camRadius-.08);
-document.getElementById('zoomOut').onclick=()=>camRadius=Math.min(1.25,camRadius+.08);
-document.getElementById('resetView').onclick=()=>{camRadius=.78;camYaw=.72;camPitch=.56};
-document.getElementById('toggleDCL').onclick=()=>{dclGroup.visible=!dclGroup.visible;document.getElementById('dclLegend').hidden=!dclGroup.visible;document.getElementById('toggleDCL').classList.toggle('active',dclGroup.visible)};
-
-function updateCamera(){
-  camera.position.set(camRadius*Math.sin(camYaw)*Math.cos(camPitch),camRadius*Math.sin(camPitch)+.12,camRadius*Math.cos(camYaw)*Math.cos(camPitch));
-  camera.lookAt(0,.14,0);
-}
-function resize(){
-  const rect=canvas.getBoundingClientRect(); const w=Math.max(1,rect.width),h=Math.max(1,rect.height);
-  if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
-}
-
-// Dynamics of rigid tower about the ball joint
-function integrate(dt){
-  const {tau}=torqueNow();
-  // slender tower equivalent inertia about base; slightly increased for numerical stability
-  const I=Math.max(.0007, TOWER_MASS*H*H/3 + .0003);
-  const alpha=tau.clone().multiplyScalar(1/I);
-  omega.addScaledVector(alpha,dt);
-  omega.multiplyScalar(Math.exp(-2.6*dt));
-  // cap angular speed for stable educational simulation
-  if(omega.length()>2.2) omega.setLength(2.2);
-  const angle=omega.length()*dt;
-  if(angle>1e-7){
-    const dq=new THREE.Quaternion().setFromAxisAngle(omega.clone().normalize(),angle);
-    towerPivot.quaternion.premultiply(dq).normalize();
-  }
-  // ball-joint physical stop: tower cannot pass below board; max tilt ~58°
-  const up=new THREE.Vector3(0,1,0).applyQuaternion(towerPivot.quaternion);
-  const tilt=Math.acos(THREE.MathUtils.clamp(up.y,-1,1));
-  const maxTilt=THREE.MathUtils.degToRad(58);
-  if(tilt>maxTilt){
-    const axis=new THREE.Vector3(up.z,0,-up.x).normalize();
-    towerPivot.quaternion.setFromAxisAngle(axis,maxTilt); omega.multiplyScalar(.25);
-  }
-  // when nearly balanced, settle very gently to exact vertical
-  const M=residualStaticMoment();
-  if(M<2e-6 && omega.length()<.02) towerPivot.quaternion.slerp(new THREE.Quaternion(),.025);
-}
-
-function animate(t){
-  requestAnimationFrame(animate); resize(); updateCamera();
-  const dt=Math.min(.025,(t-last)/1000||.016);last=t;
-  integrate(dt);
-  updateSceneGeometry();
-  renderer.render(scene,camera);
-}
-applyInputs(); updateSlots(); requestAnimationFrame(animate);
+bindRealtime();rebuildTower();calcEquilibrium();requestAnimationFrame(animate);

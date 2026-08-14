@@ -1,21 +1,26 @@
-# Laboratorio 3D — Torre en equilibrio
+# Laboratorio 3D de equilibrio de una torre — GitHub Pages
 
-Aplicación estática para GitHub Pages.
+Versión estática sin proceso de compilación. Usa **Three.js** para la escena y **cannon-es** para la dinámica de cuerpo rígido con rótula.
 
-## Uso
+## Publicar
 1. Sube `index.html`, `styles.css` y `app.js` a la raíz de un repositorio.
-2. En GitHub: Settings → Pages → Deploy from a branch → `main` / root.
+2. GitHub → Settings → Pages → Deploy from a branch → `main` / root.
 3. Abre la URL de GitHub Pages.
 
-## Modelo
-- Altura de la torre: 0.34 m.
-- Gravedad: 9.81 m/s².
-- La rótula está en el origen.
-- `r1` y `r2` son vectores polares en el plano de la base (radio + ángulo).
-- Para que `m3` y `r3` sean únicos, la polea 3 se restringe al radio experimental fijo de 0.08 m.
-- La simulación dinámica representa la torre como cuerpo rígido articulado en una rótula; las tensiones se modelan cuasiestáticamente como `T = mg`.
+## Qué implementa
+- Base circular de radio físico 20 cm, con plano polar y marcas de 10°.
+- Gravedad real `g = 9.81 m/s²`.
+- Rótula física mediante `PointToPointConstraint`: transmite fuerza, no momento.
+- 3 cables, poleas P1/P2/P3 y masas colgantes visibles.
+- Sliders en tiempo real para m1, m2, m3 y los tres vectores de posición (radio + ángulo).
+- Altura de torre 10–100 cm y tres modelos visuales.
+- Botón de cálculo de equilibrio: conserva el radio actual de r3 y calcula su dirección + m3.
+- Vectores r1, r2, r3 dibujados sobre la base.
+- DCL con componentes x y z de T1/T2/T3 y reacción, y el peso únicamente en j.
+- 3 modos de cámara: horizontal, vertical y libre; zoom +/−.
+- 4 reinicios: torre, poleas, masas y todo.
 
-## Modos de cámara
-- Horizontal: arrastre rota solo en azimut.
-- Vertical: arrastre rota solo en elevación.
-- Libre: arrastre rota en ambos ejes.
+## Nota física
+Al cambiar sliders no se pulsa “actualizar”: geometría, fuerzas, resultados y dibujo cambian de inmediato. La inclinación de la torre sí evoluciona dinámicamente (no salta), porque la escena integra las ecuaciones de movimiento. El peso se aplica por la gravedad del motor físico. Las tensiones se modelan como cuerdas ideales con magnitud `T = m g`; la dirección se recalcula en cada cuadro desde la punta de la torre hacia cada polea. La rótula mantiene conectado el pie de la torre al centro de la base.
+
+Para que el botón pueda determinar una solución única cuando m3 y r3 son editables, se conserva el **radio actual** de r3 y se calcula su ángulo y la masa m3 necesarios para anular el momento en la posición vertical.
