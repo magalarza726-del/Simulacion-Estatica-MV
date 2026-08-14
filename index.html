@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>Laboratorio 3D · Torre en Equilibrio</title>
+  <link rel="stylesheet" href="./styles.css"/>
+</head>
+<body>
+  <main id="app">
+    <header class="topbar">
+      <div>
+        <h1>Laboratorio 3D · Equilibrio de la torre</h1>
+        <p>Mecánica Vectorial P4 · g = 9.81 m/s²</p>
+      </div>
+      <div id="statusPill" class="status ok">Equilibrio</div>
+    </header>
+
+    <section class="workspace">
+      <aside class="panel controls">
+        <div class="mode-switch">
+          <button id="modeSliders" class="active">Sliders</button>
+          <button id="modeMasses">30 masas</button>
+        </div>
+
+        <div id="sliderMode">
+          <h2>Entradas</h2>
+          <p class="hint">Solo se editan m₁, m₂, r₁ y r₂. El sistema calcula m₃ y r₃.</p>
+
+          <label>Masa m₁ <output id="m1Out">5.00 g</output></label>
+          <input id="m1" type="range" min="4.47" max="5.65" value="5.00" step="0.01"/>
+
+          <label>Masa m₂ <output id="m2Out">5.00 g</output></label>
+          <input id="m2" type="range" min="4.47" max="5.65" value="5.00" step="0.01"/>
+
+          <div class="vector-card">
+            <strong>r₁</strong>
+            <label>Radio <output id="r1Out">8.0 cm</output></label>
+            <input id="r1" type="range" min="4" max="12" value="8" step="0.1"/>
+            <label>Ángulo <output id="a1Out">140°</output></label>
+            <input id="a1" type="range" min="-180" max="180" value="140" step="1"/>
+          </div>
+
+          <div class="vector-card">
+            <strong>r₂</strong>
+            <label>Radio <output id="r2Out">8.0 cm</output></label>
+            <input id="r2" type="range" min="4" max="12" value="8" step="0.1"/>
+            <label>Ángulo <output id="a2Out">40°</output></label>
+            <input id="a2" type="range" min="-180" max="180" value="40" step="1"/>
+          </div>
+        </div>
+
+        <div id="massMode" hidden>
+          <h2>Masas predefinidas</h2>
+          <p class="hint">Arrastra una masa a una polea o al extremo de su cuerda en la escena.</p>
+          <div id="massTray" class="mass-tray"></div>
+          <div class="assigned">
+            <button data-slot="0">m₁: <span id="slot0">sin masa</span> ✕</button>
+            <button data-slot="1">m₂: <span id="slot1">sin masa</span> ✕</button>
+            <button data-slot="2">m₃ usada: <span id="slot2">sin masa</span> ✕</button>
+          </div>
+          <p class="hint">m₃ ideal se calcula automáticamente; si colocas otra masa en el cable 3, aparecerá un momento residual y la torre se inclinará.</p>
+        </div>
+
+        <div class="results">
+          <h2>Resultado</h2>
+          <div><span>m₃ ideal</span><b id="m3Result">—</b></div>
+          <div><span>r₃</span><b id="r3Result">—</b></div>
+          <div><span>|ΣM₀|</span><b id="momentResult">—</b></div>
+        </div>
+      </aside>
+
+      <section class="scene-wrap">
+        <canvas id="scene"></canvas>
+
+        <div class="scene-buttons left">
+          <button id="rotHorizontal">↔ Horizontal</button>
+          <button id="rotVertical">↕ Vertical</button>
+          <button id="rotFree" class="active">⤢ Libre</button>
+        </div>
+        <div class="scene-buttons right">
+          <button id="zoomIn">＋</button>
+          <button id="zoomOut">−</button>
+          <button id="resetView">⌂</button>
+          <button id="toggleDCL">DCL</button>
+        </div>
+
+        <div id="dropHint" class="drop-hint">Suelta sobre una polea</div>
+        <div id="dclLegend" class="dcl-legend" hidden>
+          <b>Diagrama de cuerpo libre</b>
+          <span><i class="c1"></i>T₁</span>
+          <span><i class="c2"></i>T₂</span>
+          <span><i class="c3"></i>T₃</span>
+          <span><i class="cw"></i>W</span>
+          <span><i class="cr"></i>Rótula</span>
+        </div>
+      </section>
+    </section>
+
+    <section class="mobile-results">
+      <span>m₃ ideal <b id="m3Mobile">—</b></span>
+      <span>r₃ <b id="r3Mobile">—</b></span>
+    </section>
+  </main>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js"
+    }
+  }
+  </script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
