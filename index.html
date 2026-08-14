@@ -43,17 +43,27 @@
             <h2>Masas</h2>
             <button class="mini-reset" id="resetMasses">Reiniciar masas</button>
           </div>
+          <p class="hint">Rango: 0.5 g a 1000.0 g. Puedes usar el slider o escribir el valor con una cifra decimal.</p>
           <div class="slider-row mass m1">
-            <label>m₁ <output id="m1Out">5.00 g</output></label>
-            <input id="m1" type="range" min="0.50" max="20" value="5.00" step="0.01" />
+            <label>m₁ <output id="m1Out">5.0 g</output></label>
+            <div class="range-with-number">
+              <input id="m1" type="range" min="0.5" max="1000" value="5.0" step="0.1" />
+              <div class="number-box"><input id="m1Num" type="number" inputmode="decimal" min="0.5" max="1000" value="5.0" step="0.1" aria-label="Masa m1 en gramos" /><span>g</span></div>
+            </div>
           </div>
           <div class="slider-row mass m2">
-            <label>m₂ <output id="m2Out">5.00 g</output></label>
-            <input id="m2" type="range" min="0.50" max="20" value="5.00" step="0.01" />
+            <label>m₂ <output id="m2Out">5.0 g</output></label>
+            <div class="range-with-number">
+              <input id="m2" type="range" min="0.5" max="1000" value="5.0" step="0.1" />
+              <div class="number-box"><input id="m2Num" type="number" inputmode="decimal" min="0.5" max="1000" value="5.0" step="0.1" aria-label="Masa m2 en gramos" /><span>g</span></div>
+            </div>
           </div>
           <div class="slider-row mass m3">
-            <label>m₃ <output id="m3Out">5.00 g</output></label>
-            <input id="m3" type="range" min="0.50" max="30" value="5.00" step="0.01" />
+            <label>m₃ <output id="m3Out">5.0 g</output></label>
+            <div class="range-with-number">
+              <input id="m3" type="range" min="0.5" max="1000" value="5.0" step="0.1" />
+              <div class="number-box"><input id="m3Num" type="number" inputmode="decimal" min="0.5" max="1000" value="5.0" step="0.1" aria-label="Masa m3 en gramos" /><span>g</span></div>
+            </div>
           </div>
         </section>
 
@@ -62,30 +72,39 @@
             <h2>Poleas · vectores rᵢ</h2>
             <button class="mini-reset" id="resetPulleys">Reiniciar poleas</button>
           </div>
-          <p class="hint">Origen en la rótula. 0° = +x y 90° = +z. Radio máximo: 20 cm.</p>
+          <p class="hint">Origen en la rótula. 0° = +x y 90° = +z. Radio máximo: 20 cm. Los ángulos aceptan una cifra decimal.</p>
 
           <article class="vector-card v1">
             <div class="vector-title"><span>P1</span><b>r₁</b><output id="r1VecOut">(−14.7, 8.5) cm</output></div>
             <label>Radio <output id="r1Out">17.0 cm</output></label>
             <input id="r1" type="range" min="2" max="20" value="17" step="0.1" />
-            <label>Ángulo <output id="a1Out">150°</output></label>
-            <input id="a1" type="range" min="0" max="359" value="150" step="1" />
+            <label>Ángulo <output id="a1Out">150.0°</output></label>
+            <div class="range-with-number">
+              <input id="a1" type="range" min="0" max="360" value="150.0" step="0.1" />
+              <div class="number-box angle-box"><input id="a1Num" type="number" inputmode="decimal" min="0" max="360" value="150.0" step="0.1" aria-label="Ángulo de P1 en grados" /><span>°</span></div>
+            </div>
           </article>
 
           <article class="vector-card v2">
             <div class="vector-title"><span>P2</span><b>r₂</b><output id="r2VecOut">(14.7, 8.5) cm</output></div>
             <label>Radio <output id="r2Out">17.0 cm</output></label>
             <input id="r2" type="range" min="2" max="20" value="17" step="0.1" />
-            <label>Ángulo <output id="a2Out">30°</output></label>
-            <input id="a2" type="range" min="0" max="359" value="30" step="1" />
+            <label>Ángulo <output id="a2Out">30.0°</output></label>
+            <div class="range-with-number">
+              <input id="a2" type="range" min="0" max="360" value="30.0" step="0.1" />
+              <div class="number-box angle-box"><input id="a2Num" type="number" inputmode="decimal" min="0" max="360" value="30.0" step="0.1" aria-label="Ángulo de P2 en grados" /><span>°</span></div>
+            </div>
           </article>
 
           <article class="vector-card v3">
             <div class="vector-title"><span>P3</span><b>r₃</b><output id="r3VecOut">(0.0, −17.0) cm</output></div>
             <label>Radio <output id="r3Out">17.0 cm</output></label>
             <input id="r3" type="range" min="2" max="20" value="17" step="0.1" />
-            <label>Ángulo <output id="a3Out">270°</output></label>
-            <input id="a3" type="range" min="0" max="359" value="270" step="1" />
+            <label>Ángulo <output id="a3Out">270.0°</output></label>
+            <div class="range-with-number">
+              <input id="a3" type="range" min="0" max="360" value="270.0" step="0.1" />
+              <div class="number-box angle-box"><input id="a3Num" type="number" inputmode="decimal" min="0" max="360" value="270.0" step="0.1" aria-label="Ángulo de P3 en grados" /><span>°</span></div>
+            </div>
           </article>
 
           <button id="calcBalance" class="primary">Calcular equilibrio con r₃ actual</button>

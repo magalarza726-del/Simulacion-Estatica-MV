@@ -24,3 +24,10 @@ Versión estática sin proceso de compilación. Usa **Three.js** para la escena 
 Al cambiar sliders no se pulsa “actualizar”: geometría, fuerzas, resultados y dibujo cambian de inmediato. La inclinación de la torre sí evoluciona dinámicamente (no salta), porque la escena integra las ecuaciones de movimiento. El peso se aplica por la gravedad del motor físico. Las tensiones se modelan como cuerdas ideales con magnitud `T = m g`; la dirección se recalcula en cada cuadro desde la punta de la torre hacia cada polea. La rótula mantiene conectado el pie de la torre al centro de la base.
 
 Para que el botón pueda determinar una solución única cuando m3 y r3 son editables, se conserva el **radio actual** de r3 y se calcula su ángulo y la masa m3 necesarios para anular el momento en la posición vertical.
+
+
+## V4 — entradas numéricas
+- m1, m2 y m3: 0.5 g a 1000.0 g, paso de 0.1 g.
+- Cada masa puede ajustarse con slider o escribirse directamente.
+- Los ángulos de P1, P2 y P3 pueden ajustarse con slider o escribirse con paso de 0.1°.
+- Todos los cambios siguen siendo en tiempo real; no hay botón de actualización.
