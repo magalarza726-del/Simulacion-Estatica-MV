@@ -2,11 +2,13 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.m
 import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
 
 const G = 9.81;
+const EQUILIBRIUM_TOL = 0.003; // mismo criterio para indicador y dinámica
+const MAX_TILT = THREE.MathUtils.degToRad(85); // límite físico/visual solicitado
 const BASE_RADIUS = 0.20;
 const BASE_THICK = 0.018;
 const PIVOT_Y = BASE_THICK / 2 + 0.018;
 const DEFAULTS = {
-  model:'prototype', hCm:34,
+  model:'prototype', hCm:34, towerMassg:50.0,
   m1g:5.00,m2g:5.00,m3g:5.00,
   r1cm:17,a1:150,r2cm:17,a2:30,r3cm:17,a3:270
 };
@@ -48,7 +50,7 @@ world.defaultContactMaterial.friction = 0.45;
 
 const groundBody = new CANNON.Body({mass:0}); world.addBody(groundBody);
 let towerBody=null, towerConstraint=null, towerVisual=null;
-let towerMass=0.012, towerCom=0.1, towerH=0.34, towerStickCount=12, towerContactRadius=0.004;
+let towerMass=0.050, towerCom=0.1, towerH=0.34, towerContactRadius=0.004;
 let previousVel = new CANNON.Vec3();
 let smoothAccel = new THREE.Vector3();
 
@@ -164,7 +166,7 @@ function generateTowerSegments(model,h){
     lv.at(-1).forEach(p=>addStick(segs,p,tip,'main',.0020));
   }
   let com=0; for(const s of segs) com+=(s.a.y+s.b.y)*.5; com/=Math.max(1,segs.length);
-  return {segments:segs,count:segs.length,mass:segs.length*.001,com,tip};
+  return {segments:segs,count:segs.length,com,tip};
 }
 function buildTowerVisual(model,h,com,structure){
   if(towerVisual) scene.remove(towerVisual);
@@ -178,7 +180,7 @@ function buildTowerVisual(model,h,com,structure){
     const a=s.a.clone();a.y-=com; const b=s.b.clone();b.y-=com;
     cylinderBetween(a,b,s.radius,mats[s.kind]||mats.main,towerVisual);
   }
-  // Conexión rígida visual entre la bola de la rótula y el entramado (no cuenta como palito).
+  // Conexión rígida visual entre la bola de la rótula y el entramado.
   const neck=new THREE.Mesh(new THREE.CylinderGeometry(.006,.009,.025,20),socketMat); neck.position.y=-com+.0125; neck.castShadow=true; towerVisual.add(neck);
   // Nudo superior único: todas las cuerdas convergen exactamente a este punto.
   const knot=new THREE.Mesh(new THREE.SphereGeometry(.0085,22,16),new THREE.MeshStandardMaterial({color:0xeee9df,roughness:.76})); knot.position.set(0,h-com,0); knot.castShadow=true; towerVisual.add(knot);
@@ -191,7 +193,7 @@ function rebuildTower({preserveOrientation=false}={}){
   const model=$('towerModel').value,h=+$('height').value/100,structure=generateTowerSegments(model,h),com=structure.com;
   let q=new CANNON.Quaternion(),av=new CANNON.Vec3(); if(preserveOrientation&&towerBody){q.copy(towerBody.quaternion);av.copy(towerBody.angularVelocity)}
   if(towerConstraint) world.removeConstraint(towerConstraint); if(towerBody) world.removeBody(towerBody);
-  towerH=h;towerCom=com;towerStickCount=structure.count;towerMass=structure.mass;towerContactRadius=.0045;
+  towerH=h;towerCom=com;towerMass=Math.max(.001,+$('towerMass').value/1000);towerContactRadius=.0045;
   towerBody=new CANNON.Body({mass:towerMass,position:new CANNON.Vec3(0,PIVOT_Y+com,0),angularDamping:.99,linearDamping:.99});
   towerBody.addShape(new CANNON.Box(new CANNON.Vec3(.018,h*.5,.018)),new CANNON.Vec3(0,h*.5-com,0));
   if(preserveOrientation){towerBody.quaternion.copy(q);towerBody.angularVelocity.copy(av)}
@@ -213,7 +215,7 @@ for(let i=0;i<3;i++)buildPulley(i);
 function updateLine(slot,points,color=ropeColor){if(ropeLines[slot])scene.remove(ropeLines[slot]);const geo=new THREE.BufferGeometry().setFromPoints(points);const line=new THREE.Line(geo,new THREE.LineBasicMaterial({color,linewidth:1}));scene.add(line);ropeLines[slot]=line;return line}
 const rVectorGroup=new THREE.Group();scene.add(rVectorGroup);
 function polar(rCm,aDeg){const r=rCm/100,a=THREE.MathUtils.degToRad(aDeg);return new THREE.Vector3(r*Math.cos(a),BASE_THICK/2+.005,r*Math.sin(a))}
-function readState(){return {m:[+$('m1').value/1000,+$('m2').value/1000,+$('m3').value/1000],r:[+$('r1').value,+$('r2').value,+$('r3').value],a:[+$('a1').value,+$('a2').value,+$('a3').value],h:+$('height').value/100}}
+function readState(){return {m:[+$('m1').value/1000,+$('m2').value/1000,+$('m3').value/1000],r:[+$('r1').value,+$('r2').value,+$('r3').value],a:[+$('a1').value,+$('a2').value,+$('a3').value],h:+$('height').value/100,towerMass:+$('towerMass').value/1000}}
 function topWorldThree(){const p=new CANNON.Vec3(0,towerH-towerCom,0),w=new CANNON.Vec3();towerBody.pointToWorldFrame(p,w);return new THREE.Vector3(w.x,w.y,w.z)}
 function cmWorldThree(){return new THREE.Vector3(towerBody.position.x,towerBody.position.y,towerBody.position.z)}
 function updateGeometry(){const s=readState();for(let i=0;i<3;i++){anchors[i].copy(polar(s.r[i],s.a[i]));pulleyGroups[i].position.copy(anchors[i]).setY(BASE_THICK/2+.004);pulleyGroups[i].rotation.y=-THREE.MathUtils.degToRad(s.a[i])+Math.PI/2;labelSprites[i].position.copy(anchors[i]).add(new THREE.Vector3(0,.046,0));const radial=new THREE.Vector3(anchors[i].x,0,anchors[i].z).normalize();const outsideR=Math.max(BASE_RADIUS+.032,s.r[i]/100+.035);const out=new THREE.Vector3(radial.x*outsideR,BASE_THICK/2+.028,radial.z*outsideR);const hang=new THREE.Vector3(out.x,-.075,out.z);updateLine(i,[topWorldThree(),anchors[i].clone().setY(BASE_THICK/2+.03),out,hang],ropeColor);massGroups[i].position.copy(hang).add(new THREE.Vector3(0,-.014,0));const massScale=.78+Math.min(1.25,s.m[i]/.008)*.18;massGroups[i].scale.setScalar(massScale);massLabelSprites[i].position.copy(hang).add(new THREE.Vector3(0,-.055,0));const labelTex=massLabelSprites[i].material.map.image,ctx=labelTex.getContext('2d');ctx.clearRect(0,0,labelTex.width,labelTex.height);ctx.fillStyle='rgba(255,255,255,.82)';ctx.roundRect(4,7,248,82,16);ctx.fill();ctx.font='700 32px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#23384a';ctx.fillText(`m${i+1} = ${(s.m[i]*1000).toFixed(1)} g`,128,50);massLabelSprites[i].material.map.needsUpdate=true}
@@ -260,7 +262,8 @@ function updateDCLVisual(){
   clearGroup(dclGroup);
   const top=topWorldThree(), cm=cmWorldThree();
   const Fs=[cableForce(0),cableForce(1),cableForce(2)];
-  const weight=new THREE.Vector3(0,-towerMass*G,0);
+  const s=readState();
+  const weight=new THREE.Vector3(0,-s.towerMass*G,0);
   const sumExt=Fs[0].clone().add(Fs[1]).add(Fs[2]).add(weight);
   // Como la rótula fija el punto O, la reacción traslacional es la opuesta
   // a la suma de las fuerzas aplicadas. La rótula no aporta momento.
@@ -296,13 +299,13 @@ function updateDCLVisual(){
   $('wx').textContent='0.000';$('wy').textContent=f(weight.y);$('wz').textContent='0.000';
 }
 
-function updateOutputs(){const s=readState(),sol=idealSolution();const f=(v,n=1)=>Number(v).toFixed(n);$('heightOut').textContent=f(s.h*100,0)+' cm';$('stickCountOut').textContent=String(towerStickCount);$('towerMassOut').textContent=f(towerMass*1000,1)+' g';$('contactTiltOut').textContent=f(THREE.MathUtils.radToDeg(contactTiltAngle()),1)+'°';for(let i=0;i<3;i++){
+function updateOutputs(){const s=readState(),sol=idealSolution();const f=(v,n=1)=>Number(v).toFixed(n);$('heightOut').textContent=f(s.h*100,0)+' cm';$('towerMassOut').textContent=f(s.towerMass*1000,1)+' g';if(document.activeElement!==$('towerMassNum'))$('towerMassNum').value=f(s.towerMass*1000,1);$('contactTiltOut').textContent='85.0°';for(let i=0;i<3;i++){
   $(`m${i+1}Out`).textContent=f(s.m[i]*1000,1)+' g';
   const num=$(`m${i+1}Num`);
   if(num && document.activeElement!==num) num.value=f(s.m[i]*1000,1);
 }for(let i=0;i<3;i++){$(`r${i+1}Out`).textContent=f(s.r[i],1)+' cm';$(`a${i+1}Out`).textContent=f(s.a[i],1)+'°';
   const anum=$(`a${i+1}Num`);
-  if(anum && document.activeElement!==anum) anum.value=f(s.a[i],1);const R=polar(s.r[i],s.a[i]);$(`r${i+1}VecOut`).textContent=`(${f(R.x*100,1)}, ${f(R.z*100,1)}) cm`}$('idealM3Out').textContent=f(sol.m3*1000,1)+' g';$('idealR3Out').textContent=`(${f(sol.r3.x*100,2)}, ${f(sol.r3.z*100,2)}) cm`;const M=staticMomentMagnitude();$('momentOut').textContent=M.toExponential(2)+' N·m';const up=new THREE.Vector3(0,1,0).applyQuaternion(towerVisual?.quaternion||new THREE.Quaternion());const tilt=THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(up.y,-1,1)));$('tiltOut').textContent=f(tilt,1)+'°';const scale=Math.max(1e-7,(s.m[0]+s.m[1]+s.m[2])*G*s.h),err=M/scale;const st=$('status');st.className='status '+(err<.003?'ok':err<.035?'warn':'bad');st.innerHTML=`<span></span>${err<.003?'Equilibrada':err<.035?'Ligera inclinación':'Desequilibrada'}`}
+  if(anum && document.activeElement!==anum) anum.value=f(s.a[i],1);const R=polar(s.r[i],s.a[i]);$(`r${i+1}VecOut`).textContent=`(${f(R.x*100,1)}, ${f(R.z*100,1)}) cm`}$('idealM3Out').textContent=f(sol.m3*1000,1)+' g';$('idealR3Out').textContent=`(${f(sol.r3.x*100,2)}, ${f(sol.r3.z*100,2)}) cm`;const M=staticMomentMagnitude();$('momentOut').textContent=M.toExponential(2)+' N·m';const up=new THREE.Vector3(0,1,0).applyQuaternion(towerVisual?.quaternion||new THREE.Quaternion());const tilt=THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(up.y,-1,1)));$('tiltOut').textContent=f(tilt,1)+'°';const scale=Math.max(1e-7,(s.m[0]+s.m[1]+s.m[2])*G*s.h),err=M/scale;const st=$('status');st.className='status '+(err<EQUILIBRIUM_TOL?'ok':err<.035?'warn':'bad');st.innerHTML=`<span></span>${err<EQUILIBRIUM_TOL?'Equilibrada':err<.035?'Ligera inclinación':'Desequilibrada'}`}
 
 function bindRangeNumberPair(rangeId,numId,min,max,decimals=1){
   const range=$(rangeId), num=$(numId);
@@ -337,6 +340,11 @@ function bindRealtime(){
   bindRangeNumberPair('a1','a1Num',0,360,1);
   bindRangeNumberPair('a2','a2Num',0,360,1);
   bindRangeNumberPair('a3','a3Num',0,360,1);
+  bindRangeNumberPair('towerMass','towerMassNum',1,1000,1);
+  const syncTowerBodyMass=()=>{towerMass=Math.max(.001,+$('towerMass').value/1000);if(towerBody){towerBody.mass=towerMass;towerBody.updateMassProperties();}updateGeometry();};
+  $('towerMass').addEventListener('input',syncTowerBodyMass);
+  $('towerMassNum').addEventListener('input',syncTowerBodyMass);
+  $('towerMassNum').addEventListener('change',syncTowerBodyMass);
   $('height').addEventListener('input',()=>{rebuildTower({preserveOrientation:false});fitCameraForInputs();updateGeometry()});
   $('towerModel').addEventListener('change',()=>{rebuildTower({preserveOrientation:false});fitCameraForInputs();updateGeometry()});
   ['r1','r2','r3','r1Num','r2Num','r3Num'].forEach(id=>$(id).addEventListener('input',fitCameraForInputs));
@@ -348,12 +356,13 @@ function syncEditableBoxes(){
     if(rn) rn.value=(+$(`r${i}`).value).toFixed(1);
     if(an) an.value=(+$(`a${i}`).value).toFixed(1);
   }
+  if($('towerMassNum')) $('towerMassNum').value=(+$('towerMass').value).toFixed(1);
 }
 $('calcBalance').addEventListener('click',calcEquilibrium);
 $('resetTower').addEventListener('click',()=>{resetTowerPose();updateGeometry()});
 $('resetPulleys').addEventListener('click',()=>{for(const [id,v] of [['r1',DEFAULTS.r1cm],['a1',DEFAULTS.a1],['r2',DEFAULTS.r2cm],['a2',DEFAULTS.a2],['r3',DEFAULTS.r3cm],['a3',DEFAULTS.a3]])$(id).value=v;syncEditableBoxes();updateGeometry()});
-$('resetMasses').addEventListener('click',()=>{for(const [id,v] of [['m1',DEFAULTS.m1g],['m2',DEFAULTS.m2g],['m3',DEFAULTS.m3g]])$(id).value=v;syncEditableBoxes();updateGeometry()});
-$('resetAll').addEventListener('click',()=>{$('towerModel').value=DEFAULTS.model;$('height').value=DEFAULTS.hCm;for(const [id,v] of Object.entries({m1:DEFAULTS.m1g,m2:DEFAULTS.m2g,m3:DEFAULTS.m3g,r1:DEFAULTS.r1cm,a1:DEFAULTS.a1,r2:DEFAULTS.r2cm,a2:DEFAULTS.a2,r3:DEFAULTS.r3cm,a3:DEFAULTS.a3}))$(id).value=v;cam={radius:.78,yaw:.72,pitch:.48,mode:'free'};setRotationMode('free');dclOn=false;dclGroup.visible=false;$('dclPanel').hidden=true;$('toggleDCL').classList.remove('active');syncEditableBoxes();rebuildTower();updateGeometry()});
+$('resetMasses').addEventListener('click',()=>{for(const [id,v] of [['m1',DEFAULTS.m1g],['m2',DEFAULTS.m2g],['m3',DEFAULTS.m3g],['towerMass',DEFAULTS.towerMassg]])$(id).value=v;towerMass=DEFAULTS.towerMassg/1000;if(towerBody){towerBody.mass=towerMass;towerBody.updateMassProperties();}syncEditableBoxes();resetTowerPose();updateGeometry()});
+$('resetAll').addEventListener('click',()=>{$('towerModel').value=DEFAULTS.model;$('height').value=DEFAULTS.hCm;for(const [id,v] of Object.entries({m1:DEFAULTS.m1g,m2:DEFAULTS.m2g,m3:DEFAULTS.m3g,towerMass:DEFAULTS.towerMassg,r1:DEFAULTS.r1cm,a1:DEFAULTS.a1,r2:DEFAULTS.r2cm,a2:DEFAULTS.a2,r3:DEFAULTS.r3cm,a3:DEFAULTS.a3}))$(id).value=v;cam={radius:.78,yaw:.72,pitch:.48,mode:'free'};setRotationMode('free');dclOn=false;dclGroup.visible=false;$('dclPanel').hidden=true;$('toggleDCL').classList.remove('active');syncEditableBoxes();rebuildTower();updateGeometry()});
 
 function setRotationMode(mode){cam.mode=mode;$('rotH').classList.toggle('active',mode==='h');$('rotV').classList.toggle('active',mode==='v');$('rotFree').classList.toggle('active',mode==='free')}
 $('rotH').onclick=()=>setRotationMode('h');$('rotV').onclick=()=>setRotationMode('v');$('rotFree').onclick=()=>setRotationMode('free');$('zoomIn').onclick=()=>cam.radius=Math.max(.40,cam.radius-.10);$('zoomOut').onclick=()=>cam.radius=Math.min(3.6,cam.radius+.12);$('resetCamera').onclick=()=>{cam.radius=.78;cam.yaw=.72;cam.pitch=.48;fitCameraForInputs()};$('toggleDCL').onclick=()=>{dclOn=!dclOn;dclGroup.visible=dclOn;$('dclPanel').hidden=!dclOn;$('toggleDCL').classList.toggle('active',dclOn)};
@@ -372,32 +381,18 @@ function totalTorqueForQuaternion(q){
     const F=anchor.sub(top).normalize().multiplyScalar(s.m[i]*G);
     tau.add(rTop.clone().cross(F));
   }
-  const W=new THREE.Vector3(0,-towerMass*G,0);
+  const W=new THREE.Vector3(0,-s.towerMass*G,0);
   tau.add(rCm.clone().cross(W));
   return tau;
 }
-function contactTiltAngle(){
-  // Contacto geométrico aproximado entre el eje estructural y la cara superior
-  // del disco de madera. El tope ya no es arbitrario (28°): depende de h y de R_base.
-  const planeY=BASE_THICK/2+.0005;
-  const minY=theta=>{
-    const sn=Math.max(1e-6,Math.sin(theta)), cs=Math.cos(theta);
-    if(cs>=0) return PIVOT_Y-towerContactRadius;
-    const sWithinBase=Math.min(towerH,BASE_RADIUS/sn);
-    return PIVOT_Y+sWithinBase*cs-towerContactRadius;
-  };
-  let lo=Math.PI/2,hi=Math.PI-.02;
-  if(minY(lo)<=planeY) return lo;
-  for(let k=0;k<45;k++){const mid=(lo+hi)/2;if(minY(mid)<=planeY)hi=mid;else lo=mid;}
-  return hi;
-}
+function contactTiltAngle(){ return MAX_TILT; }
 function targetTowerQuaternion(){
   const id=new THREE.Quaternion();
   const tau0=totalTorqueForQuaternion(id); tau0.y=0;
   const M=tau0.length(),s=readState();
   const scale=Math.max(1e-9,(s.m[0]+s.m[1]+s.m[2])*G*s.h);
-  if(M/scale<5e-5||M<1e-11) return {q:id,tilt:0,contact:contactTiltAngle()};
-  const axis=tau0.normalize(),contact=contactTiltAngle();
+  if(M/scale<EQUILIBRIUM_TOL||M<1e-11) return {q:id,tilt:0,contact:MAX_TILT};
+  const axis=tau0.normalize(),contact=MAX_TILT;
   const f=theta=>{
     const q=new THREE.Quaternion().setFromAxisAngle(axis,theta);
     return totalTorqueForQuaternion(q).dot(axis);
@@ -421,8 +416,8 @@ function physicsStep(dt){
   if(!towerBody)return;
   // Respuesta cuasiestática sobreamortiguada: sin rebote ni sobrepaso.
   // El objetivo se obtiene a partir del torque de las tres tensiones y del peso real
-  // de la torre (1 g por palito). Si no aparece un equilibrio antes, la torre llega
-  // al ángulo de contacto geométrico con la base de madera.
+  // de la torre seleccionada por el usuario. Si no aparece un equilibrio antes,
+  // la inclinación se limita a 85° y nunca sobrepasa ese valor.
   const target=targetTowerQuaternion();
   const currentQ=new THREE.Quaternion(towerBody.quaternion.x,towerBody.quaternion.y,towerBody.quaternion.z,towerBody.quaternion.w);
   const alpha=1-Math.exp(-4.8*Math.max(dt,0));
