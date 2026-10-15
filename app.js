@@ -219,9 +219,18 @@ function polar(rCm,aDeg){const r=rCm/100,a=THREE.MathUtils.degToRad(aDeg);return
 function readState(){return {m:[+$('m1').value/1000,+$('m2').value/1000,+$('m3').value/1000],r:[+$('r1').value,+$('r2').value,+$('r3').value],a:[+$('a1').value,+$('a2').value,+$('a3').value],h:+$('height').value/100,towerMass:+$('towerMass').value/1000}}
 function topWorldThree(){const p=new CANNON.Vec3(0,towerH-towerCom,0),w=new CANNON.Vec3();towerBody.pointToWorldFrame(p,w);return new THREE.Vector3(w.x,w.y,w.z)}
 function cmWorldThree(){return new THREE.Vector3(towerBody.position.x,towerBody.position.y,towerBody.position.z)}
-function updateGeometry(){const s=readState();for(let i=0;i<3;i++){anchors[i].copy(polar(s.r[i],s.a[i]));pulleyGroups[i].position.copy(anchors[i]).setY(BASE_THICK/2+.004);pulleyGroups[i].rotation.y=-THREE.MathUtils.degToRad(s.a[i])+Math.PI/2;labelSprites[i].position.copy(anchors[i]).add(new THREE.Vector3(0,.046,0));const radial=new THREE.Vector3(anchors[i].x,0,anchors[i].z).normalize();const outsideR=Math.max(BASE_RADIUS+.032,s.r[i]/100+.035);const out=new THREE.Vector3(radial.x*outsideR,BASE_THICK/2+.028,radial.z*outsideR);const hang=new THREE.Vector3(out.x,-.075,out.z);updateLine(i,[topWorldThree(),anchors[i].clone().setY(BASE_THICK/2+.03),out,hang],ropeColor);massGroups[i].position.copy(hang).add(new THREE.Vector3(0,-.014,0));const massScale=.78+Math.min(1.25,s.m[i]/.008)*.18;massGroups[i].scale.setScalar(massScale);massLabelSprites[i].position.copy(hang).add(new THREE.Vector3(0,-.055,0));const labelTex=massLabelSprites[i].material.map.image,ctx=labelTex.getContext('2d');ctx.clearRect(0,0,labelTex.width,labelTex.height);ctx.fillStyle='rgba(255,255,255,.82)';ctx.roundRect(4,7,248,82,16);ctx.fill();ctx.font='700 32px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#23384a';ctx.fillText(`m${i+1} = ${(s.m[i]*1000).toFixed(1)} g`,128,50);massLabelSprites[i].material.map.needsUpdate=true}
-  while(rVectorGroup.children.length)rVectorGroup.remove(rVectorGroup.children[0]);for(let i=0;i<3;i++){const r=new THREE.Vector3(anchors[i].x,0,anchors[i].z);rVectorGroup.add(new THREE.ArrowHelper(r.clone().normalize(),new THREE.Vector3(0,BASE_THICK/2+.012,0),r.length(),vecColors[i],.012,.006))}
-  updateOutputs();updateDCLVisual();}
+function updateGeometry(){const s=readState();for(let i=0;i<3;i++){anchors[i].copy(polar(s.r[i],s.a[i]));pulleyGroups[i].position.copy(anchors[i]).setY(BASE_THICK/2+.004);pulleyGroups[i].rotation.y=-THREE.MathUtils.degToRad(s.a[i])+Math.PI/2;labelSprites[i].position.copy(anchors[i]).add(new THREE.Vector3(0,.046,0));const radial=new THREE.Vector3(anchors[i].x,0,anchors[i].z).normalize();const outsideR=Math.max(BASE_RADIUS+.032,s.r[i]/100+.035);const out=new THREE.Vector3(radial.x*outsideR,BASE_THICK/2+.028,radial.z*outsideR);const hang=new THREE.Vector3(out.x,-.075,out.z);updateLine(i,[topWorldThree(),anchors[i].clone().setY(BASE_THICK/2+.03),out,hang],ropeColor);massGroups[i].position.copy(hang).add(new THREE.Vector3(0,-.014,0));const massScale=.78+Math.min(1.25,s.m[i]/.008)*.18;massGroups[i].scale.setScalar(massScale);massLabelSprites[i].position.copy(hang).add(new THREE.Vector3(0,-.055,0));const labelText=`m${i+1} = ${(s.m[i]*1000).toFixed(1)} g`;
+    if(massLabelSprites[i].userData.labelText!==labelText){
+      const labelTex=massLabelSprites[i].material.map.image,ctx=labelTex.getContext('2d');
+      ctx.clearRect(0,0,labelTex.width,labelTex.height);
+      ctx.fillStyle='rgba(255,255,255,.82)';ctx.roundRect(4,7,248,82,16);ctx.fill();
+      ctx.font='700 32px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#23384a';
+      ctx.fillText(labelText,128,50);
+      massLabelSprites[i].material.map.needsUpdate=true;
+      massLabelSprites[i].userData.labelText=labelText;
+    }}
+  clearGroup(rVectorGroup);for(let i=0;i<3;i++){const r=new THREE.Vector3(anchors[i].x,0,anchors[i].z);rVectorGroup.add(new THREE.ArrowHelper(r.clone().normalize(),new THREE.Vector3(0,BASE_THICK/2+.012,0),r.length(),vecColors[i],.012,.006))}
+  updateOutputs();if(dclOn)updateDCLVisual();}
 
 // Equilibrio analítico. Se conserva el radio actual de r3 para cerrar la solución única.
 function idealSolution(){const s=readState(),H=s.h;const R1=polar(s.r[0],s.a[0]);R1.y=0;const R2=polar(s.r[1],s.a[1]);R2.y=0;const rho3=s.r[2]/100;const effectiveH=H-(BASE_THICK/2+.03-PIVOT_Y);const L1=Math.hypot(effectiveH,s.r[0]/100),L2=Math.hypot(effectiveH,s.r[1]/100),L3=Math.hypot(effectiveH,rho3);const q=R1.multiplyScalar(s.m[0]/L1).add(R2.multiplyScalar(s.m[1]/L2));const qmag=q.length();if(qmag<1e-12)return {m3:0,r3:new THREE.Vector3(rho3,0,0),a3:0};const r3=q.clone().normalize().multiplyScalar(-rho3);const m3=L3*qmag/rho3;let a3=THREE.MathUtils.radToDeg(Math.atan2(r3.z,r3.x));if(a3<0)a3+=360;return {m3,r3,a3}}
@@ -249,7 +258,17 @@ function applyCableForces(){const topLocal=new CANNON.Vec3(0,towerH-towerCom,0),
 function resetTowerPose(){if(!towerBody)return;towerBody.position.set(0,PIVOT_Y+towerCom,0);towerBody.quaternion.set(0,0,0,1);towerBody.velocity.set(0,0,0);towerBody.angularVelocity.set(0,0,0);towerBody.force.set(0,0,0);towerBody.torque.set(0,0,0);previousVel.copy(towerBody.velocity);smoothAccel.set(0,0,0);syncTowerVisual()}
 
 const dclGroup=new THREE.Group();scene.add(dclGroup);dclGroup.visible=false;let dclOn=false;
-function clearGroup(g){while(g.children.length)g.remove(g.children[0])}
+function clearGroup(g){
+  // ArrowHelper comparte geometrías estáticas de THREE: se liberan materiales
+  // y texturas propias, pero NO esas geometrías compartidas.
+  while(g.children.length){
+    const obj=g.children[0];g.remove(obj);
+    obj.traverse(part=>{
+      const mats=Array.isArray(part.material)?part.material:part.material?[part.material]:[];
+      for(const mat of mats){if(mat.map)mat.map.dispose();mat.dispose()}
+    });
+  }
+}
 function addComponentArrow(origin,axisValue,axis,color,label){if(Math.abs(axisValue)<1e-5)return;const scale=.18,vec=new THREE.Vector3();vec[axis]=axisValue*scale;const ar=new THREE.ArrowHelper(vec.clone().normalize(),origin,Math.max(.025,vec.length()),color,.012,.006);dclGroup.add(ar);const s=textSprite(label,{color:'#17212b',font:38,scale:.017,bg:'rgba(255,255,255,.82)'});s.position.copy(origin).add(vec).add(new THREE.Vector3(0,.012,0));dclGroup.add(s)}
 function updateDCLVisual(){
   if(!towerBody)return;
