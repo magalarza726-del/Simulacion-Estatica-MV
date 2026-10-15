@@ -50,3 +50,18 @@ Para que el botón pueda determinar una solución única cuando m3 y r3 son edit
 - El indicador `Equilibrada` y la dinámica usan exactamente la misma tolerancia de equilibrio; una torre marcada como equilibrada vuelve y permanece vertical.
 - La inclinación máxima está limitada a 85.0°.
 - La respuesta continúa siendo sobreamortiguada, sin rebote.
+
+
+## V7 — inclinación gradual y Android sin conexión
+
+La versión V6 podía llevar la torre directamente a 85° ante un desequilibrio mínimo cuando su búsqueda de estabilidad no encontraba una raíz. En V7 se añade un **modo didáctico estabilizado** (predeterminado): el momento neto vertical de los tres cables determina la inclinación mediante `θ = min(85°, |M| / k)`, siendo `k = 0.18 N·m/rad` una **rigidez angular virtual ajustable**. Por ejemplo, con la configuración inicial, 0.1 g extra en un cable produce aproximadamente 0.05° en lugar de 85°. Se conserva por separado el modo **rótula ideal** para comparar los resultados.
+
+**Importante:** la estabilización virtual no pertenece a una rótula ideal sin momento restaurador. La simulación proporcional sirve para analizar el desbalance y explorar la inclinación; no sustituye el análisis estructural completo de estabilidad. Ver [VERIFICACION_V7.md](VERIFICACION_V7.md).
+
+### APK para Android
+
+La carpeta [android/](android/) contiene el proyecto Kotlin para Android Studio. El flujo [Compilar APK Android offline](.github/workflows/build-android.yml) genera un APK debug instalable como artefacto **Torre-MV-Offline-APK** en GitHub Actions.
+
+El primer build requiere conexión para obtener Gradle y las bibliotecas; el APK resultante contiene Three.js, cannon-es, HTML, CSS y JavaScript en recursos locales y **no solicita permiso de Internet**. Requiere Android 8.0+ y soporte WebGL en Android WebView.
+
+Pruebas de regresión: `node --test tests/physics.test.mjs`. Para detalles de compilación, ver [android/README.md](android/README.md).

@@ -48,6 +48,15 @@
             <div class="number-box"><input id="towerMassNum" type="number" inputmode="decimal" min="1" max="1000" value="50.0" step="0.1" aria-label="Masa de la torre en gramos" /><span>g</span></div>
           </div>
           <p class="hint">La masa de la torre es independiente del modelo geométrico. Rango: 1.0 g a 1000.0 g.</p>
+          <label class="select-row">Modelo de inclinación
+            <select id="tiltMode">
+              <option value="proportional">Proporcional · estabilizado</option>
+              <option value="ideal">Rótula ideal · teórico</option>
+            </select>
+          </label>
+          <label>Rigidez angular virtual <output id="angularStiffnessOut">0.18 N·m/rad</output></label>
+          <input id="angularStiffness" type="range" min="0.05" max="1.00" step="0.01" value="0.18" />
+          <p class="hint">El modo proporcional incorpora un resorte angular virtual: inclinación = momento neto ÷ rigidez. No es una rótula ideal. A mayor rigidez, menor inclinación.</p>
         </section>
 
         <section class="control-section">
@@ -175,7 +184,7 @@
             <div class="dcl-row reaction"><span>Rótula R</span><b id="rx">0</b><b id="ry">0</b><b id="rz">0</b></div>
             <div class="dcl-row weight"><span>Peso W</span><b id="wx">0</b><b id="wy">0</b><b id="wz">0</b></div>
           </div>
-          <p>Las tensiones T₁, T₂ y T₃ y la reacción de la rótula R se descomponen en x, y, z. El peso actúa únicamente en −y, por lo que Wₓ = 0 y W_z = 0.</p>
+          <p>Las tensiones T₁, T₂ y T₃ y la reacción se descomponen en x, y, z. El peso actúa en −y. En el modo proporcional, el estabilizador virtual también transmite un momento restaurador; no aparece como fuerza en esta tabla.</p>
         </aside>
 
         <div class="legend">
